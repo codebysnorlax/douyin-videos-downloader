@@ -360,11 +360,12 @@
         }
         
         if (bestVideo) {
+            const isSameVideo = (bestVideo === currentVideo);
             currentVideo = bestVideo;
             const extracted = extractFromVideo(bestVideo);
             if (extracted && !extracted.startsWith('blob:')) {
                 currentUrl = extracted;
-            } else {
+            } else if (!isSameVideo) {
                 currentUrl = null;
             }
             updateUI();
@@ -383,8 +384,10 @@
             urlDisplay.textContent = 'No video detected';
             downloadBtn.style.opacity = '0.5';
             downloadBtn.style.cursor = 'not-allowed';
+            downloadBtn.disabled = true;
             captureBtn.style.opacity = '0.5';
             captureBtn.style.cursor = 'not-allowed';
+            captureBtn.disabled = true;
             return;
         }
         
@@ -396,24 +399,30 @@
             urlDisplay.textContent = currentUrl;
             downloadBtn.style.opacity = '1';
             downloadBtn.style.cursor = 'pointer';
+            downloadBtn.disabled = false;
             captureBtn.style.opacity = '0.5';
             captureBtn.style.cursor = 'not-allowed';
+            captureBtn.disabled = true;
         } else if (isBlob) {
             statusEl.textContent = 'Stream video(blob) -use Record';
             statusEl.style.color = '#675FA5';
             urlDisplay.textContent = currentVideo.src || '';
             downloadBtn.style.opacity = '0.5';
             downloadBtn.style.cursor = 'not-allowed';
+            downloadBtn.disabled = true;
             captureBtn.style.opacity = '1';
             captureBtn.style.cursor = 'pointer';
+            captureBtn.disabled = false;
         } else {
             statusEl.textContent = 'Scanning for video source...';
             statusEl.style.color = '#675FA5';
             urlDisplay.textContent = 'Checking network requests...';
             downloadBtn.style.opacity = '0.5';
             downloadBtn.style.cursor = 'not-allowed';
+            downloadBtn.disabled = true;
             captureBtn.style.opacity = '0.5';
             captureBtn.style.cursor = 'not-allowed';
+            captureBtn.disabled = true;
         }
     }
     
@@ -434,6 +443,9 @@
             return;
         }
         
+        downloadBtn.disabled = true;
+        downloadBtn.style.opacity = '0.5';
+        downloadBtn.style.cursor = 'not-allowed';
         statusEl.textContent = '⬇ Downloading...';
         
         try {
@@ -450,10 +462,15 @@
             URL.revokeObjectURL(blobUrl);
             
             statusEl.textContent = '✓ Download complete!';
-            setTimeout(() => statusEl.textContent = 'Ready', 2000);
+            setTimeout(() => {
+                updateUI();
+            }, 2000);
         } catch (err) {
             statusEl.textContent = '⚠ Opening in new tab...';
             window.open(currentUrl, '_blank');
+            setTimeout(() => {
+                updateUI();
+            }, 2000);
         }
     }
     
