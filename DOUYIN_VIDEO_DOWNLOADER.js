@@ -168,11 +168,19 @@
         return originalOpen.call(this, method, url, ...rest);
     };
     
-    // Helper to get React properties of a DOM node
+    // Helper to get React Fiber node of a DOM node
+    function getReactFiber(element) {
+        if (!element) return null;
+        const keys = Object.keys(element);
+        const key = keys.find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+        return key ? element[key] : null;
+    }
+
+    // Helper to get React Props of a DOM node (fallback)
     function getReactProps(element) {
         if (!element) return null;
         const keys = Object.keys(element);
-        const key = keys.find(k => k.startsWith('__reactProps$') || k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+        const key = keys.find(k => k.startsWith('__reactProps$'));
         return key ? element[key] : null;
     }
 
@@ -191,15 +199,24 @@
         let urls = [];
         
         if (typeof obj === 'string') {
-            if (obj.startsWith('http') && (
+            const isUrl = obj.startsWith('http') || obj.startsWith('//');
+            if (isUrl && (
                 obj.includes('.mp4') || 
                 obj.includes('.m3u8') ||
+                obj.includes('.webm') ||
                 obj.includes('douyinvod.com') ||
                 obj.includes('snssdk.com') ||
                 obj.includes('amemv.com') ||
-                obj.includes('video_id=')
+                obj.includes('adgdns.com') ||
+                obj.includes('bytegecko.com') ||
+                obj.includes('video_id=') ||
+                obj.includes('/video/') ||
+                obj.includes('play_addr') ||
+                obj.includes('mime=video') ||
+                obj.includes('mime_type=video')
             )) {
-                urls.push(obj);
+                const cleanUrl = obj.startsWith('//') ? 'https:' + obj : obj;
+                urls.push(cleanUrl);
             }
             return urls;
         }
@@ -229,21 +246,45 @@
 
     // Extracts video URLs by traversing React ancestor tree
     function extractUrlsFromReact(video) {
-        let parent = video;
-        let visitedElements = 0;
         const visitedObjects = new Set();
         
-        while (parent && visitedElements < 12) {
-            const props = getReactProps(parent);
-            if (props) {
-                const urls = findUrlsInObject(props, 6, visitedObjects);
-                if (urls.length > 0) {
-                    return urls;
+        // 1. First try Fiber tree traversal (highly reliable)
+        try {
+            let fiber = getReactFiber(video);
+            let visitedFibers = 0;
+            while (fiber && visitedFibers < 40) {
+                if (fiber.memoizedProps) {
+                    const urls = findUrlsInObject(fiber.memoizedProps, 6, visitedObjects);
+                    if (urls.length > 0) return urls;
                 }
+                if (fiber.memoizedState) {
+                    const urls = findUrlsInObject(fiber.memoizedState, 6, visitedObjects);
+                    if (urls.length > 0) return urls;
+                }
+                fiber = fiber.return;
+                visitedFibers++;
             }
-            parent = parent.parentElement;
-            visitedElements++;
+        } catch (e) {
+            console.error('Fiber traversal failed:', e);
         }
+        
+        // 2. Fall back to DOM parent props traversal
+        try {
+            let parent = video;
+            let visitedElements = 0;
+            while (parent && visitedElements < 12) {
+                const props = getReactProps(parent);
+                if (props) {
+                    const urls = findUrlsInObject(props, 6, visitedObjects);
+                    if (urls.length > 0) return urls;
+                }
+                parent = parent.parentElement;
+                visitedElements++;
+            }
+        } catch (e) {
+            console.error('DOM props traversal failed:', e);
+        }
+        
         return [];
     }
 
