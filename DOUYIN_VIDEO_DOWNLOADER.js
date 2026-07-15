@@ -168,11 +168,94 @@
         return originalOpen.call(this, method, url, ...rest);
     };
     
+    // Helper to get React properties of a DOM node
+    function getReactProps(element) {
+        if (!element) return null;
+        const keys = Object.keys(element);
+        const key = keys.find(k => k.startsWith('__reactProps$') || k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+        return key ? element[key] : null;
+    }
+
+    // Helper to recursively find video URLs in an object
+    function findUrlsInObject(obj, maxDepth = 8, visited = new Set()) {
+        if (!obj || maxDepth <= 0) return [];
+        if (typeof obj === 'object') {
+            // Safety: Skip traversing DOM nodes/window objects which can be circular or slow
+            if (obj instanceof Element || obj instanceof HTMLDocument || obj === window || obj === document || (obj.constructor && obj.constructor.name === 'Window')) {
+                return [];
+            }
+            if (visited.has(obj)) return [];
+            visited.add(obj);
+        }
+        
+        let urls = [];
+        
+        if (typeof obj === 'string') {
+            if (obj.startsWith('http') && (
+                obj.includes('.mp4') || 
+                obj.includes('.m3u8') ||
+                obj.includes('douyinvod.com') ||
+                obj.includes('snssdk.com') ||
+                obj.includes('amemv.com') ||
+                obj.includes('video_id=')
+            )) {
+                urls.push(obj);
+            }
+            return urls;
+        }
+        
+        if (typeof obj !== 'object') return [];
+        
+        if (Array.isArray(obj)) {
+            for (const item of obj) {
+                urls.push(...findUrlsInObject(item, maxDepth - 1, visited));
+            }
+            return urls;
+        }
+        
+        for (const key in obj) {
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+                try {
+                    const val = obj[key];
+                    if (val) {
+                        urls.push(...findUrlsInObject(val, maxDepth - 1, visited));
+                    }
+                } catch(e) {}
+            }
+        }
+        
+        return urls;
+    }
+
+    // Extracts video URLs by traversing React ancestor tree
+    function extractUrlsFromReact(video) {
+        let parent = video;
+        let visitedElements = 0;
+        const visitedObjects = new Set();
+        
+        while (parent && visitedElements < 12) {
+            const props = getReactProps(parent);
+            if (props) {
+                const urls = findUrlsInObject(props, 6, visitedObjects);
+                if (urls.length > 0) {
+                    return urls;
+                }
+            }
+            parent = parent.parentElement;
+            visitedElements++;
+        }
+        return [];
+    }
+
     // Check if URL is downloadable
     function checkForDirectUrl(url) {
         if (!url.includes('blob:') && url.startsWith('http')) {
-            currentUrl = url;
-            updateUI();
+            capturedUrls.add(url);
+            // Only update currentUrl from intercepted network requests if we don't have an active video
+            if (!currentVideo && !currentUrl) {
+                currentUrl = url;
+                updateUI();
+            }
         }
     }
     
@@ -198,6 +281,17 @@
                 return parent.dataset.src;
             }
             parent = parent.parentElement;
+        }
+        
+        // Try React props extraction
+        try {
+            const reactUrls = extractUrlsFromReact(video);
+            if (reactUrls.length > 0) {
+                const directUrl = reactUrls.find(url => !url.startsWith('blob:'));
+                if (directUrl) return directUrl;
+            }
+        } catch(e) {
+            console.error('React props extraction failed:', e);
         }
         
         return video.src || null;
@@ -234,31 +328,49 @@
     function trackVideo() {
         const videos = document.querySelectorAll('video');
         let bestVideo = null;
-        let bestScore = 0;
-        const viewportCenter = window.innerHeight / 2;
         
-        videos.forEach(video => {
-            const rect = video.getBoundingClientRect();
-            const visible = rect.top < window.innerHeight && rect.bottom > 0;
-            
-            if (visible) {
-                const videoCenter = rect.top + rect.height / 2;
-                const distance = Math.abs(viewportCenter - videoCenter);
-                const score = 1 - (distance / window.innerHeight);
-                
-                if (score > bestScore) {
-                    bestScore = score;
-                    bestVideo = video;
-                }
+        // 1. Try to find the currently playing video
+        for (const video of videos) {
+            if (!video.paused && video.currentTime > 0 && !video.ended) {
+                bestVideo = video;
+                break;
             }
-        });
+        }
         
-        if (bestVideo && bestVideo !== currentVideo) {
+        // 2. If no video is playing, find the one closest to the viewport center
+        if (!bestVideo) {
+            let bestScore = 0;
+            const viewportCenter = window.innerHeight / 2;
+            
+            videos.forEach(video => {
+                const rect = video.getBoundingClientRect();
+                const visible = rect.top < window.innerHeight && rect.bottom > 0;
+                
+                if (visible) {
+                    const videoCenter = rect.top + rect.height / 2;
+                    const distance = Math.abs(viewportCenter - videoCenter);
+                    const score = 1 - (distance / window.innerHeight);
+                    
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestVideo = video;
+                    }
+                }
+            });
+        }
+        
+        if (bestVideo) {
             currentVideo = bestVideo;
             const extracted = extractFromVideo(bestVideo);
             if (extracted && !extracted.startsWith('blob:')) {
                 currentUrl = extracted;
+            } else {
+                currentUrl = null;
             }
+            updateUI();
+        } else {
+            currentVideo = null;
+            currentUrl = null;
             updateUI();
         }
     }
@@ -415,15 +527,17 @@
         setTimeout(trackVideo, 100);
     }, { passive: true });
     
+    // Play event listener to capture active video immediately on play
+    document.addEventListener('play', (e) => {
+        if (e.target.tagName === 'VIDEO') {
+            trackVideo();
+        }
+    }, true);
+    
     // Mutation observer for dynamic content
     const observer = new MutationObserver(() => {
         setTimeout(() => {
             trackVideo();
-            const pageUrl = scanPageData();
-            if (pageUrl && !currentUrl) {
-                currentUrl = pageUrl;
-                updateUI();
-            }
         }, 500);
     });
     
@@ -432,7 +546,6 @@
     // Initial scan
     setTimeout(() => {
         trackVideo();
-        scanPageData();
         updateUI();
     }, 1000);
     
