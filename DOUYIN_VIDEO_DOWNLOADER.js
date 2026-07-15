@@ -417,6 +417,16 @@
         }
     }
     
+    // Helper to format timestamp as DV-DD-MM-MI-SS
+    function getFormattedTimestamp() {
+        const now = new Date();
+        const dd = String(now.getDate()).padStart(2, '0');
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const min = String(now.getMinutes()).padStart(2, '0');
+        const sec = String(now.getSeconds()).padStart(2, '0');
+        return `DV-${dd}-${mm}-${min}-${sec}`;
+    }
+
     // Download function
     async function downloadVideo() {
         if (!currentUrl || currentUrl.startsWith('blob:')) {
@@ -433,7 +443,7 @@
             
             const a = document.createElement('a');
             a.href = blobUrl;
-            a.download = `douyin_${Date.now()}.mp4`;
+            a.download = `${getFormattedTimestamp()}.mp4`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -480,7 +490,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `douyin_capture_${Date.now()}.webm`;
+                a.download = `${getFormattedTimestamp()}.webm`;
                 a.click();
                 URL.revokeObjectURL(url);
                 
