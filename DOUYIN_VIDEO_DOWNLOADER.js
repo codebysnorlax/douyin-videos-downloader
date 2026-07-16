@@ -135,11 +135,27 @@
                     display: flex;
                     align-items: center;
                     justify-content: center;
+                    gap: 5px;
                     outline: none;
                     transition: opacity 0.2s;
-                ">Download this video</button>
+                "><span id="dl-btn-text">Download this video</span></button>
             </div>
         </div>
+        <style>
+            @keyframes dl-spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            .dl-spinner {
+                width: 12px;
+                height: 12px;
+                border: 2px solid rgba(206,205,255,0.3);
+                border-top: 2px solid #CECDFF;
+                border-radius: 50%;
+                animation: dl-spin 0.8s linear infinite;
+                flex-shrink: 0;
+            }
+        </style>
     `;
     document.body.appendChild(ui);
     
@@ -676,7 +692,11 @@
     }
 
     /** Fetch video detail from Douyin API for a specific aweme_id */
+    const pendingFetches = new Set();
     async function fetchAwemeDetail(awemeId) {
+        // Prevent duplicate concurrent fetches for the same ID
+        if (pendingFetches.has(awemeId)) return;
+        pendingFetches.add(awemeId);
         try {
             const apiUrl = `https://www.douyin.com/aweme/v1/web/aweme/detail/?aweme_id=${awemeId}&aid=6383&device_platform=web`;
             const resp = await originalFetch(apiUrl, {
@@ -695,11 +715,20 @@
             }
         } catch(e) {
             console.warn('[Douyin DL] API detail fetch failed:', e.message);
+        } finally {
+            pendingFetches.delete(awemeId);
         }
     }
     
     // Update UI
+    function resetDownloadBtn() {
+        const spinner = document.getElementById('dl-active-spinner');
+        if (spinner) spinner.remove();
+        const btnText = document.getElementById('dl-btn-text');
+        if (btnText) btnText.textContent = 'Download this video';
+    }
     function updateUI() {
+        resetDownloadBtn();
         if (!currentVideo) {
             statusEl.textContent = 'Scanning for videos...';
             statusEl.style.color = '#675FA5';
@@ -766,9 +795,17 @@
         }
         
         downloadBtn.disabled = true;
-        downloadBtn.style.opacity = '0.5';
+        downloadBtn.style.opacity = '0.8';
         downloadBtn.style.cursor = 'not-allowed';
+        const btnText = document.getElementById('dl-btn-text');
+        btnText.textContent = 'Downloading...';
+        // Add spinner before text
+        const spinner = document.createElement('span');
+        spinner.className = 'dl-spinner';
+        spinner.id = 'dl-active-spinner';
+        downloadBtn.insertBefore(spinner, btnText);
         statusEl.textContent = '⬇ Downloading...';
+
         
         const filename = `${getFormattedTimestamp()}.mp4`;
         const urlToDownload = currentUrl;
@@ -818,9 +855,10 @@
     }
 
     async function fetchDownload(url, filename) {
-        // Attempt 1: Simple fetch (no custom headers → avoids CORS preflight)
+        // Attempt 1: Simple fetch WITHOUT credentials (CDN returns Access-Control-Allow-Origin: *
+        // which is incompatible with credentials:include)
         try {
-            const response = await fetch(url);
+            const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
             if (response.ok) {
                 const blob = await response.blob();
                 if (isValidVideoBlob(blob)) {
@@ -834,30 +872,11 @@
             console.warn('[Douyin DL] Simple fetch failed:', e.message);
         }
 
-        // Attempt 2: Fetch with credentials (same-site cookies may help)
-        try {
-            const response = await fetch(url, { credentials: 'include' });
-            if (response.ok) {
-                const blob = await response.blob();
-                if (isValidVideoBlob(blob)) {
-                    triggerBlobDownload(blob, filename);
-                    statusEl.textContent = '✓ Download complete!';
-                    setTimeout(updateUI, 2000);
-                    return;
-                }
-            }
-        } catch(e) {
-            console.warn('[Douyin DL] Credentialed fetch failed:', e.message);
-        }
-
-        // Attempt 3: Direct anchor download (browser handles it natively)
-        // For same-origin or permissive CORS, this triggers a Save-As dialog
+        // Attempt 2: Direct anchor download (browser handles it natively)
         try {
             const a = document.createElement('a');
             a.href = url;
             a.download = filename;
-            a.target = '_blank';
-            a.rel = 'noopener';
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
