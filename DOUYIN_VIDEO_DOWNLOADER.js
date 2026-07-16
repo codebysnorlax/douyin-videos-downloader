@@ -15,12 +15,12 @@
     const ui = document.createElement('div');
     ui.id = 'douyin-dl-ui';
     ui.innerHTML = `
-        <div style="
+        <div id="dl-panel" style="
             position: fixed;
             top: 20px;
             right: 20px;
             width: 300px;
-            height: 126px;
+            height: 142px;
             background-color: #090A0A;
             color: #ffffff;
             box-sizing: border-box;
@@ -32,6 +32,8 @@
             flex-direction: column;
             justify-content: space-between;
             padding: 10px 12px;
+            cursor: grab;
+            user-select: none;
         ">
             <button id="dl-btn-close" style="
                 position: absolute;
@@ -68,6 +70,14 @@
                     font-weight: 500;
                     min-height: 14px;
                 ">Scanning for videos...</div>
+                
+                <div id="dl-aweme-id" style="
+                    font-size: 9px;
+                    color: #4a4a5a;
+                    font-family: monospace;
+                    min-height: 11px;
+                    letter-spacing: 0.3px;
+                "></div>
                 
                 <div id="dl-url-display" style="
                     font-size: 9.5px;
@@ -139,9 +149,50 @@
     const downloadBtn = document.getElementById('dl-btn-download');
     const captureBtn = document.getElementById('dl-btn-capture');
     const closeBtn = document.getElementById('dl-btn-close');
+    const awemeIdEl = document.getElementById('dl-aweme-id');
     
     // Close button
     closeBtn.onclick = () => ui.remove();
+    
+    // ── Drag functionality ────────────────────────────────────────────
+    const panel = document.getElementById('dl-panel');
+    let isDragging = false;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+    
+    panel.addEventListener('mousedown', (e) => {
+        // Don't drag when clicking buttons
+        if (e.target.tagName === 'BUTTON') return;
+        isDragging = true;
+        const rect = panel.getBoundingClientRect();
+        dragOffsetX = e.clientX - rect.left;
+        dragOffsetY = e.clientY - rect.top;
+        panel.style.cursor = 'grabbing';
+        // Switch from right-positioned to left-positioned for dragging
+        panel.style.left = rect.left + 'px';
+        panel.style.top = rect.top + 'px';
+        panel.style.right = 'auto';
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        let newX = e.clientX - dragOffsetX;
+        let newY = e.clientY - dragOffsetY;
+        // Clamp to viewport
+        newX = Math.max(0, Math.min(newX, window.innerWidth - panel.offsetWidth));
+        newY = Math.max(0, Math.min(newY, window.innerHeight - panel.offsetHeight));
+        panel.style.left = newX + 'px';
+        panel.style.top = newY + 'px';
+        panel.style.right = 'auto';
+    });
+    
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            panel.style.cursor = 'grab';
+        }
+    });
     
     // ── URL extraction from page data ─────────────────────────────────
     // Douyin embeds the full video metadata inside a <script id="RENDER_DATA">
@@ -247,13 +298,65 @@
         return m ? m[1] : null;
     }
 
+    /** Check if we're on a feed/scroll page with multiple videos (not a single video page) */
+    function isFeedPage() {
+        const videos = document.querySelectorAll('video');
+        if (videos.length > 1) return true;
+        // Feed URLs typically don't have /video/ in them
+        const path = location.pathname;
+        if (path === '/' || path.startsWith('/discover') || path.startsWith('/follow') || path.startsWith('/recommend')) return true;
+        return false;
+    }
+
+    /**
+     * Extract aweme_id from a video element by walking up the DOM
+     * to find the ancestor with data-e2e-vid attribute.
+     * Douyin puts this on the sliderVideo container (ancestor ~5 levels up).
+     */
+    function getAwemeIdFromVideoElement(videoEl) {
+        if (!videoEl) return null;
+        let el = videoEl;
+        for (let i = 0; i < 20 && el && el !== document.body; i++) {
+            // Primary: data-e2e-vid attribute (exact video ID)
+            if (el.dataset && el.dataset.e2eVid) {
+                return el.dataset.e2eVid;
+            }
+            // Backup: class name contains video_XXXXX
+            if (el.className && typeof el.className === 'string') {
+                const m = el.className.match(/video_(\d{15,})/);
+                if (m) return m[1];
+            }
+            el = el.parentElement;
+        }
+        return null;
+    }
+
     /**
      * Main extraction: parse RENDER_DATA / SSR globals to find the play URL
      * for the currently-visible video (matched by aweme_id when possible).
+     * @param {string|null} targetAwemeId - The aweme_id extracted from the visible video element's fiber
      */
-    function getVideoUrlFromPageData() {
-        const awemeId = getAwemeIdFromPageUrl();
+    function getVideoUrlFromPageData(targetAwemeId) {
+        // Use fiber-extracted ID first, fall back to URL-based ID
+        const awemeId = targetAwemeId || getAwemeIdFromPageUrl();
         const allPlayUrls = [];
+
+        // Helper: search a data source with awemeId matching
+        function searchDataSource(data) {
+            if (!data) return null;
+            // If we have an aweme_id, ONLY return URLs from the matching aweme
+            if (awemeId) {
+                const matching = findAwemeById(data, awemeId);
+                if (matching) {
+                    const urls = extractPlayAddrUrls(matching);
+                    if (urls.length > 0) return urls[0];
+                }
+                return null; // Don't fall through to generic extraction when we have an ID
+            }
+            // No aweme_id available — generic extraction (less precise)
+            const urls = extractPlayAddrUrls(data);
+            return urls.length > 0 ? urls[0] : null;
+        }
 
         // ── Source 1: <script id="RENDER_DATA"> (URL-encoded JSON) ──
         try {
@@ -262,31 +365,24 @@
                 const raw = el.textContent || el.innerText || '';
                 const decoded = decodeURIComponent(raw);
                 const data = JSON.parse(decoded);
-                // If we have an aweme_id, try to find the matching aweme first
-                if (awemeId) {
-                    const matching = findAwemeById(data, awemeId);
-                    if (matching) {
-                        const urls = extractPlayAddrUrls(matching);
-                        if (urls.length > 0) return urls[0];
-                    }
+                const result = searchDataSource(data);
+                if (result) return result;
+                if (!awemeId) {
+                    const urls = extractPlayAddrUrls(data);
+                    allPlayUrls.push(...urls);
                 }
-                const urls = extractPlayAddrUrls(data);
-                allPlayUrls.push(...urls);
             }
         } catch(e) {}
 
         // ── Source 2: _ROUTER_DATA (newer Douyin pages) ──
         try {
             if (window._ROUTER_DATA) {
-                if (awemeId) {
-                    const matching = findAwemeById(window._ROUTER_DATA, awemeId);
-                    if (matching) {
-                        const urls = extractPlayAddrUrls(matching);
-                        if (urls.length > 0) return urls[0];
-                    }
+                const result = searchDataSource(window._ROUTER_DATA);
+                if (result) return result;
+                if (!awemeId) {
+                    const urls = extractPlayAddrUrls(window._ROUTER_DATA);
+                    allPlayUrls.push(...urls);
                 }
-                const urls = extractPlayAddrUrls(window._ROUTER_DATA);
-                allPlayUrls.push(...urls);
             }
         } catch(e) {}
 
@@ -300,15 +396,12 @@
         for (const data of globals) {
             if (!data) continue;
             try {
-                if (awemeId) {
-                    const matching = findAwemeById(data, awemeId);
-                    if (matching) {
-                        const urls = extractPlayAddrUrls(matching);
-                        if (urls.length > 0) return urls[0];
-                    }
+                const result = searchDataSource(data);
+                if (result) return result;
+                if (!awemeId) {
+                    const urls = extractPlayAddrUrls(data);
+                    allPlayUrls.push(...urls);
                 }
-                const urls = extractPlayAddrUrls(data);
-                allPlayUrls.push(...urls);
             } catch(e) {}
         }
 
@@ -316,13 +409,17 @@
         try {
             const scripts = document.querySelectorAll('script[type="application/json"], script:not([src])');
             for (const script of scripts) {
-                if (script.id === 'RENDER_DATA') continue; // already handled
+                if (script.id === 'RENDER_DATA') continue;
                 const text = script.textContent || '';
                 if (!text.includes('play_addr') && !text.includes('playAddr') && !text.includes('url_list')) continue;
                 try {
                     const data = JSON.parse(text.startsWith('%') ? decodeURIComponent(text) : text);
-                    const urls = extractPlayAddrUrls(data);
-                    allPlayUrls.push(...urls);
+                    const result = searchDataSource(data);
+                    if (result) return result;
+                    if (!awemeId) {
+                        const urls = extractPlayAddrUrls(data);
+                        allPlayUrls.push(...urls);
+                    }
                 } catch(e) {}
             }
         } catch(e) {}
@@ -361,129 +458,243 @@
         return null;
     }
 
-    // ── Network interception (backup) ─────────────────────────────────
-    // Captures direct CDN video URLs seen in fetch / XHR traffic.
-    const capturedUrls = new Set();
+    // ── Network interception ─────────────────────────────────────────
+    // Intercept API responses to build a map of aweme_id → video download URL.
+    // Douyin loads video data dynamically via feed API calls as user scrolls.
+    const videoUrlMap = new Map(); // aweme_id → CDN video URL
+    const capturedUrls = new Set(); // legacy fallback
 
-    const originalFetch = window.fetch;
-    window.fetch = function(...args) {
-        try {
-            const url = typeof args[0] === 'string' ? args[0] : args[0]?.url;
-            if (url) captureNetworkUrl(url);
-        } catch(e) {}
-        return originalFetch.apply(this, args);
-    };
-
-    const originalOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-        if (typeof url === 'string') captureNetworkUrl(url);
-        return originalOpen.call(this, method, url, ...rest);
-    };
-
-    function captureNetworkUrl(raw) {
-        const url = cleanVideoUrl(raw);
-        if (url && looksLikeVideoUrl(url)) {
-            capturedUrls.add(url);
-            // Update currentUrl if we don't have one yet
-            if (!currentUrl) {
-                currentUrl = url;
-                updateUI();
+    /**
+     * Parse an API response object to extract aweme_id → video_url mappings.
+     * Douyin feed API returns { aweme_list: [ { aweme_id, video: { play_addr: { url_list } } } ] }
+     */
+    function parseAwemeListFromResponse(data) {
+        if (!data || typeof data !== 'object') return;
+        
+        // Direct aweme_list array
+        const lists = [];
+        if (Array.isArray(data.aweme_list)) lists.push(data.aweme_list);
+        if (Array.isArray(data.data)) lists.push(data.data);
+        // Nested in data.data
+        if (data.data && Array.isArray(data.data.aweme_list)) lists.push(data.data.aweme_list);
+        
+        // Also search recursively for any aweme_list
+        function findLists(obj, depth = 5, visited = new Set()) {
+            if (!obj || depth <= 0 || typeof obj !== 'object') return;
+            if (visited.has(obj)) return;
+            visited.add(obj);
+            if (Array.isArray(obj.aweme_list) && !lists.includes(obj.aweme_list)) {
+                lists.push(obj.aweme_list);
+            }
+            if (Array.isArray(obj)) {
+                for (const item of obj) findLists(item, depth - 1, visited);
+            } else {
+                for (const key in obj) {
+                    try {
+                        if (obj[key] && typeof obj[key] === 'object') findLists(obj[key], depth - 1, visited);
+                    } catch(e) {}
+                }
+            }
+        }
+        findLists(data);
+        
+        for (const list of lists) {
+            for (const aweme of list) {
+                if (!aweme || typeof aweme !== 'object') continue;
+                const id = aweme.aweme_id || aweme.awemeId;
+                if (!id) continue;
+                
+                // Extract play URL
+                const urls = extractPlayAddrUrls(aweme);
+                if (urls.length > 0) {
+                    videoUrlMap.set(id, urls[0]);
+                    console.log(`[Douyin DL] Mapped: ${id} → ${urls[0].substring(0, 80)}...`);
+                }
+            }
+        }
+        
+        // Also handle single aweme detail responses
+        if (data.aweme_detail || data.awemeDetail) {
+            const aweme = data.aweme_detail || data.awemeDetail;
+            const id = aweme.aweme_id || aweme.awemeId;
+            if (id) {
+                const urls = extractPlayAddrUrls(aweme);
+                if (urls.length > 0) {
+                    videoUrlMap.set(id, urls[0]);
+                    console.log(`[Douyin DL] Mapped detail: ${id} → ${urls[0].substring(0, 80)}...`);
+                }
             }
         }
     }
 
-    // ── React fiber traversal (backup) ────────────────────────────────
-    function getReactFiber(element) {
-        if (!element) return null;
-        const keys = Object.keys(element);
-        const key = keys.find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
-        return key ? element[key] : null;
+    /** Check if a URL is a Douyin API endpoint that returns video data */
+    function isVideoApiUrl(url) {
+        if (!url || typeof url !== 'string') return false;
+        return (
+            url.includes('/aweme/v1/') ||
+            url.includes('/aweme/v2/') ||
+            url.includes('/aweme/v3/') ||
+            url.includes('tab/feed') ||
+            url.includes('tab/recommend') ||
+            url.includes('related/recommend') ||
+            url.includes('aweme/detail') ||
+            url.includes('aweme/post') ||
+            url.includes('aweme_list') ||
+            url.includes('/web/tab/') ||
+            url.includes('/web/feed/') ||
+            url.includes('/web/recommend/')
+        );
     }
 
-    function extractUrlsFromReactFiber(video) {
-        try {
-            let fiber = getReactFiber(video);
-            let visited = new Set();
-            let count = 0;
-            while (fiber && count < 30) {
-                if (fiber.memoizedProps) {
-                    const urls = extractPlayAddrUrls(fiber.memoizedProps, 6, visited);
-                    if (urls.length > 0) return urls;
-                }
-                if (fiber.memoizedState) {
-                    const urls = extractPlayAddrUrls(fiber.memoizedState, 6, visited);
-                    if (urls.length > 0) return urls;
-                }
-                fiber = fiber.return;
-                count++;
-            }
-        } catch(e) {}
-        return [];
-    }
+    // Intercept fetch to capture API response bodies
+    const originalFetch = window.fetch;
+    window.fetch = function(...args) {
+        const request = args[0];
+        const url = typeof request === 'string' ? request : request?.url;
+        
+        // Also capture direct CDN URLs
+        if (url) {
+            const cleaned = cleanVideoUrl(url);
+            if (cleaned && looksLikeVideoUrl(cleaned)) capturedUrls.add(cleaned);
+        }
+        
+        const result = originalFetch.apply(this, args);
+        
+        // If this is a video API call, clone the response and parse the body
+        if (url && isVideoApiUrl(url)) {
+            result.then(response => {
+                try {
+                    response.clone().json().then(data => {
+                        parseAwemeListFromResponse(data);
+                    }).catch(() => {});
+                } catch(e) {}
+            }).catch(() => {});
+        }
+        
+        return result;
+    };
+
+    // Intercept XHR to capture API response bodies
+    const originalOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+        this._douyinUrl = url;
+        // Capture direct CDN URLs
+        if (typeof url === 'string') {
+            const cleaned = cleanVideoUrl(url);
+            if (cleaned && looksLikeVideoUrl(cleaned)) capturedUrls.add(cleaned);
+        }
+        return originalOpen.call(this, method, url, ...rest);
+    };
+
+    const originalSend = XMLHttpRequest.prototype.send;
+    XMLHttpRequest.prototype.send = function(...args) {
+        if (this._douyinUrl && isVideoApiUrl(this._douyinUrl)) {
+            this.addEventListener('load', function() {
+                try {
+                    const data = JSON.parse(this.responseText);
+                    parseAwemeListFromResponse(data);
+                } catch(e) {}
+            });
+        }
+        return originalSend.apply(this, args);
+    };
 
     // ── Video tracking ────────────────────────────────────────────────
     function trackVideo() {
         const videos = document.querySelectorAll('video');
         let bestVideo = null;
+        let bestDistance = Infinity;
+        const viewportCenter = window.innerHeight / 2;
         
-        // 1. Try to find the currently playing video
-        for (const video of videos) {
-            if (!video.paused && video.currentTime > 0 && !video.ended) {
-                bestVideo = video;
-                break;
-            }
-        }
-        
-        // 2. If no video is playing, find the one closest to the viewport center
-        if (!bestVideo) {
-            let bestScore = 0;
-            const viewportCenter = window.innerHeight / 2;
+        // Find the video closest to viewport center
+        videos.forEach(video => {
+            const rect = video.getBoundingClientRect();
+            const visibleTop = Math.max(rect.top, 0);
+            const visibleBottom = Math.min(rect.bottom, window.innerHeight);
+            const visibleHeight = visibleBottom - visibleTop;
             
-            videos.forEach(video => {
-                const rect = video.getBoundingClientRect();
-                const visible = rect.top < window.innerHeight && rect.bottom > 0;
+            if (visibleHeight > rect.height * 0.3 && rect.height > 0) {
+                const videoCenter = rect.top + rect.height / 2;
+                const distance = Math.abs(viewportCenter - videoCenter);
                 
-                if (visible) {
-                    const videoCenter = rect.top + rect.height / 2;
-                    const distance = Math.abs(viewportCenter - videoCenter);
-                    const score = 1 - (distance / window.innerHeight);
-                    
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestVideo = video;
-                    }
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    bestVideo = video;
                 }
-            });
-        }
+            }
+        });
         
         if (bestVideo) {
             const isSameVideo = (bestVideo === currentVideo);
             currentVideo = bestVideo;
 
-            // Only re-resolve URL when we switch to a new video, or if we have no URL yet
-            if (!isSameVideo || !currentUrl) {
-                currentUrl = null; // reset for new video
+            // ALWAYS update the displayed aweme_id (even if same video)
+            const awemeId = getAwemeIdFromVideoElement(bestVideo);
+            awemeIdEl.textContent = awemeId ? `ID: ${awemeId}` : 'ID: not found';
 
-                // Strategy 1: Parse page data (most reliable)
-                const pageUrl = getVideoUrlFromPageData();
-                if (pageUrl) {
-                    currentUrl = pageUrl;
-                } else {
-                    // Strategy 2: React fiber props
-                    const reactUrls = extractUrlsFromReactFiber(bestVideo);
-                    if (reactUrls.length > 0) {
-                        currentUrl = reactUrls[0];
-                    } else if (capturedUrls.size > 0) {
-                        // Strategy 3: Last captured network URL
-                        currentUrl = Array.from(capturedUrls).pop();
+            if (!isSameVideo || !currentUrl) {
+                currentUrl = null;
+
+                console.log('[Douyin DL] Visible video aweme_id:', awemeId);
+
+                // Strategy 1: Look up in our intercepted API map (most reliable)
+                if (awemeId && videoUrlMap.has(awemeId)) {
+                    currentUrl = videoUrlMap.get(awemeId);
+                    console.log('[Douyin DL] URL from API map');
+                }
+
+                // Strategy 2: Parse page data with confirmed aweme_id
+                if (!currentUrl && awemeId) {
+                    const pageUrl = getVideoUrlFromPageData(awemeId);
+                    if (pageUrl) {
+                        currentUrl = pageUrl;
+                        console.log('[Douyin DL] URL from page data');
                     }
+                }
+
+                // Strategy 3: Single-video page fallback
+                if (!currentUrl && !isFeedPage()) {
+                    const pageUrl = getVideoUrlFromPageData(null);
+                    if (pageUrl) {
+                        currentUrl = pageUrl;
+                        console.log('[Douyin DL] URL from page data (single video)');
+                    }
+                }
+
+                // If we have an ID but no URL yet, try fetching from API directly
+                if (!currentUrl && awemeId) {
+                    fetchAwemeDetail(awemeId);
                 }
             }
             updateUI();
         } else {
             currentVideo = null;
             currentUrl = null;
+            awemeIdEl.textContent = '';
             updateUI();
+        }
+    }
+
+    /** Fetch video detail from Douyin API for a specific aweme_id */
+    async function fetchAwemeDetail(awemeId) {
+        try {
+            const apiUrl = `https://www.douyin.com/aweme/v1/web/aweme/detail/?aweme_id=${awemeId}&aid=6383&device_platform=web`;
+            const resp = await originalFetch(apiUrl, {
+                credentials: 'include',
+                headers: { 'Referer': 'https://www.douyin.com/' }
+            });
+            if (resp.ok) {
+                const data = await resp.json();
+                parseAwemeListFromResponse(data);
+                // Check if we got the URL now
+                if (videoUrlMap.has(awemeId)) {
+                    currentUrl = videoUrlMap.get(awemeId);
+                    console.log('[Douyin DL] URL from API detail fetch');
+                    updateUI();
+                }
+            }
+        } catch(e) {
+            console.warn('[Douyin DL] API detail fetch failed:', e.message);
         }
     }
     
@@ -828,12 +1039,13 @@
         capture: captureVideo,
         get url() { return currentUrl; },
         get video() { return currentVideo; },
+        get map() { return Object.fromEntries(videoUrlMap); },
         get captured() { return [...capturedUrls]; },
         rescan: trackVideo,
         ui: ui
     };
     
     console.log('%c[Douyin Downloader] Active! UI added to page.', 'color: #00ff00; font-size: 14px;');
-    console.log('Commands: dld.download() | dld.capture() | dld.url | dld.captured | dld.rescan()');
+    console.log('Commands: dld.download() | dld.capture() | dld.url | dld.map | dld.rescan()');
     
 })();
