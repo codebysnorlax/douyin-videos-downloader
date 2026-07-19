@@ -25,7 +25,7 @@
             color: #ffffff;
             box-sizing: border-box;
             border-radius: 14px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             z-index: 999999;
             box-shadow: 0 10px 30px rgba(0,0,0,0.6);
             display: flex;
@@ -142,6 +142,7 @@
             </div>
         </div>
         <style>
+            @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
             @keyframes dl-spin {
                 0% { transform: rotate(0deg); }
                 100% { transform: rotate(360deg); }
@@ -154,6 +155,35 @@
                 border-radius: 50%;
                 animation: dl-spin 0.8s linear infinite;
                 flex-shrink: 0;
+            }
+            @keyframes dl-spin-border {
+                100% { transform: translate(-50%, -50%) rotate(360deg); }
+            }
+            .dl-panel-animating {
+                background: transparent !important;
+                position: relative;
+                overflow: hidden;
+                z-index: 0;
+            }
+            .dl-panel-animating::before {
+                content: '';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 200%;
+                height: 500%;
+                background: conic-gradient(transparent, transparent 70%, #ff0050 85%, #00f2fe 100%);
+                animation: dl-spin-border 2s linear infinite;
+                transform: translate(-50%, -50%) rotate(0deg);
+                z-index: -2;
+            }
+            .dl-panel-animating::after {
+                content: '';
+                position: absolute;
+                inset: 2px;
+                background: #090A0A;
+                border-radius: 12px;
+                z-index: -1;
             }
         </style>
     `;
@@ -870,7 +900,7 @@
         spinner.id = 'dl-active-spinner';
         downloadBtn.insertBefore(spinner, btnText);
         statusEl.textContent = '⬇ Downloading...';
-
+        panel.classList.add('dl-panel-animating');
         
         const filename = `${getFormattedTimestamp()}.mp4`;
         const urlToDownload = currentUrl;
@@ -883,10 +913,11 @@
                     name: filename,
                     headers: { Referer: 'https://www.douyin.com/' },
                     onload: () => {
+                        panel.classList.remove('dl-panel-animating');
                         statusEl.textContent = '✓ Download complete!';
                         setTimeout(updateUI, 2000);
                     },
-                    onerror: () => fetchDownload(urlToDownload, filename)
+                    onerror: () => fetchDownload(urlToDownload, filename).then(() => panel.classList.remove('dl-panel-animating'))
                 });
                 return;
             } catch(e) {}
@@ -900,16 +931,18 @@
                     url: urlToDownload,
                     responseType: 'blob',
                     headers: { Referer: 'https://www.douyin.com/' },
-                    onload: (resp) => {
+                    onload: async (resp) => {
                         if (resp.response && resp.response.size > 10000) {
                             triggerBlobDownload(resp.response, filename);
+                            panel.classList.remove('dl-panel-animating');
                             statusEl.textContent = '✓ Download complete!';
                             setTimeout(updateUI, 2000);
                         } else {
-                            fetchDownload(urlToDownload, filename);
+                            await fetchDownload(urlToDownload, filename);
+                            panel.classList.remove('dl-panel-animating');
                         }
                     },
-                    onerror: () => fetchDownload(urlToDownload, filename)
+                    onerror: () => fetchDownload(urlToDownload, filename).then(() => panel.classList.remove('dl-panel-animating'))
                 });
                 return;
             } catch(e) {}
@@ -917,6 +950,7 @@
 
         // Method 3: Standard fetch chain
         await fetchDownload(urlToDownload, filename);
+        panel.classList.remove('dl-panel-animating');
     }
 
     async function fetchDownload(url, filename) {
@@ -1077,6 +1111,7 @@
         captureBtn.textContent = 'Stop Recording';
         captureBtn.style.backgroundColor = '#8c2d2d';
         captureBtn.style.color = '#ffffff';
+        panel.classList.add('dl-panel-animating');
         
         try {
             const stream = currentVideo.captureStream();
@@ -1097,6 +1132,7 @@
                 URL.revokeObjectURL(url);
                 
                 isRecording = false;
+                panel.classList.remove('dl-panel-animating');
                 statusEl.textContent = '✓ Recording saved!';
                 statusEl.style.color = '#675FA5';
                 captureBtn.textContent = 'Record current video';
@@ -1121,6 +1157,7 @@
             
         } catch (err) {
             isRecording = false;
+            panel.classList.remove('dl-panel-animating');
             statusEl.textContent = '❌ Recording failed';
             statusEl.style.color = '#ff6b6b';
             captureBtn.textContent = 'Record current video';
