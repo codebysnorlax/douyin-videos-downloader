@@ -920,40 +920,73 @@
     }
 
     async function fetchDownload(url, filename) {
-        // Get ALL CDN URLs for this video (different mirrors/CDN domains)
         const awemeId = getAwemeIdFromVideoElement(currentVideo);
+        
+        // Helper to try a list of URLs
+        async function tryUrls(urls) {
+            for (let i = 0; i < urls.length; i++) {
+                const tryUrl = urls[i];
+                const isSameOrigin = tryUrl.includes('www.douyin.com');
+                try {
+                    statusEl.textContent = `⬇ Trying ${isSameOrigin ? 'Douyin' : 'CDN'} ${i+1}/${urls.length}...`;
+                    const fetchOpts = isSameOrigin
+                        ? { credentials: 'include' }
+                        : { mode: 'cors', credentials: 'omit' };
+                    const response = await fetch(tryUrl, fetchOpts);
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        if (isValidVideoBlob(blob)) {
+                            triggerBlobDownload(blob, filename);
+                            statusEl.textContent = '✓ Download complete!';
+                            setTimeout(updateUI, 2000);
+                            return true;
+                        }
+                    }
+                    console.warn(`[Douyin DL] URL ${i+1} returned ${response.status} (${new URL(tryUrl).hostname})`);
+                } catch(e) {
+                    console.warn(`[Douyin DL] URL ${i+1} failed:`, e.message);
+                }
+            }
+            return false;
+        }
+        
+        // Round 1: Try URLs from the feed API map
         let urlsToTry = [url];
         if (awemeId && videoUrlMap.has(awemeId)) {
             urlsToTry = [...videoUrlMap.get(awemeId)];
-            // Add the current url at the start if not already there
             if (!urlsToTry.includes(url)) urlsToTry.unshift(url);
         }
         
-        console.log(`[Douyin DL] Trying ${urlsToTry.length} CDN URLs...`);
+        console.log(`[Douyin DL] Round 1: Trying ${urlsToTry.length} URLs...`);
+        if (await tryUrls(urlsToTry)) return;
         
-        // Try each URL — use smart credentials based on origin
-        for (let i = 0; i < urlsToTry.length; i++) {
-            const tryUrl = urlsToTry[i];
-            const isSameOrigin = tryUrl.includes('www.douyin.com');
+        // Round 2: Feed URLs failed (likely 403 from CDN).
+        // Fetch detail API to get same-origin www.douyin.com/aweme/v1/play/ URLs
+        if (awemeId) {
+            console.log('[Douyin DL] Round 2: Fetching detail API for same-origin URLs...');
+            statusEl.textContent = '⬇ Fetching fresh URLs...';
+            
             try {
-                statusEl.textContent = `⬇ Trying ${isSameOrigin ? 'Douyin' : 'CDN'} ${i+1}/${urlsToTry.length}...`;
-                // Same-origin URLs need credentials (cookies), cross-origin must omit them
-                const fetchOpts = isSameOrigin
-                    ? { credentials: 'include' }
-                    : { mode: 'cors', credentials: 'omit' };
-                const response = await fetch(tryUrl, fetchOpts);
-                if (response.ok) {
-                    const blob = await response.blob();
-                    if (isValidVideoBlob(blob)) {
-                        triggerBlobDownload(blob, filename);
-                        statusEl.textContent = '✓ Download complete!';
-                        setTimeout(updateUI, 2000);
-                        return;
-                    }
+                const apiUrl = `https://www.douyin.com/aweme/v1/web/aweme/detail/?aweme_id=${awemeId}&aid=6383&device_platform=web`;
+                const resp = await originalFetch(apiUrl, {
+                    credentials: 'include',
+                    headers: { 'Referer': 'https://www.douyin.com/' }
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    parseAwemeListFromResponse(data);
                 }
-                console.warn(`[Douyin DL] URL ${i+1} returned ${response.status} (${new URL(tryUrl).hostname})`);
             } catch(e) {
-                console.warn(`[Douyin DL] URL ${i+1} failed:`, e.message);
+                console.warn('[Douyin DL] Detail API fetch failed:', e.message);
+            }
+            
+            // Now try the newly available URLs (should include www.douyin.com ones)
+            if (videoUrlMap.has(awemeId)) {
+                const newUrls = videoUrlMap.get(awemeId).filter(u => !urlsToTry.includes(u));
+                if (newUrls.length > 0) {
+                    console.log(`[Douyin DL] Round 2: Got ${newUrls.length} new URLs`);
+                    if (await tryUrls(newUrls)) return;
+                }
             }
         }
         
