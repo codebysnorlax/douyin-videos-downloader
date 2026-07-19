@@ -249,7 +249,8 @@
             }
         } else {
             // Prioritise keys that are likely to contain the video URL
-            const priorityKeys = ['play_addr', 'playAddr', 'play_addr_h264', 'download_addr', 'downloadAddr', 'video'];
+            // play_addr FIRST (no watermark), download_addr LAST (watermarked)
+            const priorityKeys = ['play_addr', 'playAddr', 'play_addr_h264', 'video', 'download_addr', 'downloadAddr'];
             for (const key of priorityKeys) {
                 if (obj[key]) {
                     const found = extractPlayAddrUrls(obj[key], depth - 1, visited);
@@ -475,9 +476,9 @@
     }
 
     // ── Network interception ─────────────────────────────────────────
-    // Intercept API responses to build a map of aweme_id → video download URL.
+    // Intercept API responses to build a map of aweme_id → video download URLs.
     // Douyin loads video data dynamically via feed API calls as user scrolls.
-    const videoUrlMap = new Map(); // aweme_id → CDN video URL
+    const videoUrlMap = new Map(); // aweme_id → [url1, url2, ...] (all CDN mirrors)
     const capturedUrls = new Set(); // legacy fallback
 
     /**
@@ -520,11 +521,53 @@
                 const id = aweme.aweme_id || aweme.awemeId;
                 if (!id) continue;
                 
-                // Extract play URL
-                const urls = extractPlayAddrUrls(aweme);
-                if (urls.length > 0) {
-                    videoUrlMap.set(id, urls[0]);
-                    console.log(`[Douyin DL] Mapped: ${id} → ${urls[0].substring(0, 80)}...`);
+                // Collect ALL URLs: play_addr FIRST (no watermark!)
+                // download_addr has watermark — only use as last resort
+                const allUrls = [];
+                const video = aweme.video || aweme;
+                
+                // play_addr URLs (NO watermark)
+                for (const key of ['play_addr', 'playAddr', 'play_addr_h264']) {
+                    const addr = video[key];
+                    if (addr && addr.url_list) {
+                        for (const u of addr.url_list) {
+                            const cleaned = cleanVideoUrl(u);
+                            if (cleaned && looksLikeVideoUrl(cleaned) && !allUrls.includes(cleaned)) {
+                                allUrls.push(cleaned);
+                            }
+                        }
+                    }
+                }
+                
+                // download_addr URLs LAST (has watermark — fallback only)
+                for (const key of ['download_addr', 'downloadAddr']) {
+                    const addr = video[key];
+                    if (addr && addr.url_list) {
+                        for (const u of addr.url_list) {
+                            const cleaned = cleanVideoUrl(u);
+                            if (cleaned && looksLikeVideoUrl(cleaned) && !allUrls.includes(cleaned)) {
+                                allUrls.push(cleaned);
+                            }
+                        }
+                    }
+                }
+                
+                // Also try generic extraction as last resort
+                if (allUrls.length === 0) {
+                    const extracted = extractPlayAddrUrls(aweme);
+                    allUrls.push(...extracted);
+                }
+                
+                // Sort: same-origin (www.douyin.com) URLs first — they bypass CORS!
+                allUrls.sort((a, b) => {
+                    const aLocal = a.includes('www.douyin.com') ? 0 : 1;
+                    const bLocal = b.includes('www.douyin.com') ? 0 : 1;
+                    return aLocal - bLocal;
+                });
+                
+                if (allUrls.length > 0) {
+                    videoUrlMap.set(id, allUrls);
+                    console.log(`[Douyin DL] Mapped: ${id} → ${allUrls.length} URLs (${allUrls[0].substring(0, 60)}...)`);
                 }
             }
         }
@@ -534,10 +577,32 @@
             const aweme = data.aweme_detail || data.awemeDetail;
             const id = aweme.aweme_id || aweme.awemeId;
             if (id) {
-                const urls = extractPlayAddrUrls(aweme);
-                if (urls.length > 0) {
-                    videoUrlMap.set(id, urls[0]);
-                    console.log(`[Douyin DL] Mapped detail: ${id} → ${urls[0].substring(0, 80)}...`);
+                const allUrls = [];
+                const video = aweme.video || aweme;
+                // play_addr FIRST (no watermark!), download_addr LAST (watermarked)
+                for (const key of ['play_addr', 'playAddr', 'play_addr_h264', 'download_addr', 'downloadAddr']) {
+                    const addr = video[key];
+                    if (addr && addr.url_list) {
+                        for (const u of addr.url_list) {
+                            const cleaned = cleanVideoUrl(u);
+                            if (cleaned && looksLikeVideoUrl(cleaned) && !allUrls.includes(cleaned)) {
+                                allUrls.push(cleaned);
+                            }
+                        }
+                    }
+                }
+                if (allUrls.length === 0) {
+                    allUrls.push(...extractPlayAddrUrls(aweme));
+                }
+                // Sort: same-origin URLs first
+                allUrls.sort((a, b) => {
+                    const aLocal = a.includes('www.douyin.com') ? 0 : 1;
+                    const bLocal = b.includes('www.douyin.com') ? 0 : 1;
+                    return aLocal - bLocal;
+                });
+                if (allUrls.length > 0) {
+                    videoUrlMap.set(id, allUrls);
+                    console.log(`[Douyin DL] Mapped detail: ${id} → ${allUrls.length} URLs`);
                 }
             }
         }
@@ -655,8 +720,8 @@
 
                 // Strategy 1: Look up in our intercepted API map (most reliable)
                 if (awemeId && videoUrlMap.has(awemeId)) {
-                    currentUrl = videoUrlMap.get(awemeId);
-                    console.log('[Douyin DL] URL from API map');
+                    currentUrl = videoUrlMap.get(awemeId)[0]; // first URL for display
+                    console.log('[Douyin DL] URL from API map (' + videoUrlMap.get(awemeId).length + ' URLs available)');
                 }
 
                 // Strategy 2: Parse page data with confirmed aweme_id
@@ -708,7 +773,7 @@
                 parseAwemeListFromResponse(data);
                 // Check if we got the URL now
                 if (videoUrlMap.has(awemeId)) {
-                    currentUrl = videoUrlMap.get(awemeId);
+                    currentUrl = videoUrlMap.get(awemeId)[0];
                     console.log('[Douyin DL] URL from API detail fetch');
                     updateUI();
                 }
@@ -855,42 +920,53 @@
     }
 
     async function fetchDownload(url, filename) {
-        // Attempt 1: Simple fetch WITHOUT credentials (CDN returns Access-Control-Allow-Origin: *
-        // which is incompatible with credentials:include)
-        try {
-            const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
-            if (response.ok) {
-                const blob = await response.blob();
-                if (isValidVideoBlob(blob)) {
-                    triggerBlobDownload(blob, filename);
-                    statusEl.textContent = '✓ Download complete!';
-                    setTimeout(updateUI, 2000);
-                    return;
+        // Get ALL CDN URLs for this video (different mirrors/CDN domains)
+        const awemeId = getAwemeIdFromVideoElement(currentVideo);
+        let urlsToTry = [url];
+        if (awemeId && videoUrlMap.has(awemeId)) {
+            urlsToTry = [...videoUrlMap.get(awemeId)];
+            // Add the current url at the start if not already there
+            if (!urlsToTry.includes(url)) urlsToTry.unshift(url);
+        }
+        
+        console.log(`[Douyin DL] Trying ${urlsToTry.length} CDN URLs...`);
+        
+        // Try each URL — use smart credentials based on origin
+        for (let i = 0; i < urlsToTry.length; i++) {
+            const tryUrl = urlsToTry[i];
+            const isSameOrigin = tryUrl.includes('www.douyin.com');
+            try {
+                statusEl.textContent = `⬇ Trying ${isSameOrigin ? 'Douyin' : 'CDN'} ${i+1}/${urlsToTry.length}...`;
+                // Same-origin URLs need credentials (cookies), cross-origin must omit them
+                const fetchOpts = isSameOrigin
+                    ? { credentials: 'include' }
+                    : { mode: 'cors', credentials: 'omit' };
+                const response = await fetch(tryUrl, fetchOpts);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    if (isValidVideoBlob(blob)) {
+                        triggerBlobDownload(blob, filename);
+                        statusEl.textContent = '✓ Download complete!';
+                        setTimeout(updateUI, 2000);
+                        return;
+                    }
                 }
+                console.warn(`[Douyin DL] URL ${i+1} returned ${response.status} (${new URL(tryUrl).hostname})`);
+            } catch(e) {
+                console.warn(`[Douyin DL] URL ${i+1} failed:`, e.message);
             }
-        } catch(e) {
-            console.warn('[Douyin DL] Simple fetch failed:', e.message);
         }
-
-        // Attempt 2: Direct anchor download (browser handles it natively)
-        try {
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            statusEl.textContent = '⬇ Download started in browser...';
+        
+        // All fetches failed — open direct Douyin video page
+        if (awemeId) {
+            statusEl.textContent = '⬇ Opening video page...';
+            window.open(`https://www.douyin.com/video/${awemeId}`, '_blank');
             setTimeout(updateUI, 3000);
-            return;
-        } catch(e) {
-            console.warn('[Douyin DL] Anchor download failed:', e.message);
+        } else {
+            statusEl.textContent = '⬇ Opening download page...';
+            openDownloadTab(url, filename);
+            setTimeout(updateUI, 3000);
         }
-
-        // Attempt 4: Open a helper page that fetches and downloads the video
-        statusEl.textContent = '⬇ Opening download page...';
-        openDownloadTab(url, filename);
-        setTimeout(updateUI, 3000);
     }
 
     function isValidVideoBlob(blob) {
@@ -926,7 +1002,7 @@
 (async()=>{
     const st=document.getElementById('st');
     try{
-        const r=await fetch(${JSON.stringify(url)});
+        const r=await fetch(${JSON.stringify(url)},{credentials:'omit'});
         const b=await r.blob();
         if(b.size<1000){st.textContent='❌ Empty response. Right-click the link below and Save As:';
             const a2=document.createElement('a');a2.href=${JSON.stringify(url)};a2.textContent='Direct video link';
