@@ -10,6 +10,7 @@
     let currentVideo = null;
     let currentUrl = null;
     let isRecording = false;
+    let activeMediaRecorder = null;
     
     // Create floating UI
     const ui = document.createElement('div');
@@ -64,27 +65,29 @@
                     letter-spacing: -0.2px;
                 ">Douyin Downloader</div>
                 
-                <div id="dl-status" style="
-                    font-size: 11px;
-                    color: #675FA5;
-                    font-weight: 500;
-                    min-height: 14px;
-                ">Scanning for videos...</div>
+                <div style="display: flex; justify-content: space-between; width: 100%; padding: 0 8px; box-sizing: border-box; align-items: baseline; margin-top: 4px;">
+                    <div id="dl-status" style="
+                        font-size: 11px;
+                        color: #675FA5;
+                        font-weight: 500;
+                    ">Scanning for videos...</div>
+                    
+                    <div id="dl-aweme-id" style="
+                        font-size: 9px;
+                        color: #4a4a5a;
+                        font-family: monospace;
+                        letter-spacing: 0.3px;
+                    "></div>
+                </div>
                 
-                <div id="dl-aweme-id" style="
-                    font-size: 9px;
-                    color: #4a4a5a;
-                    font-family: monospace;
-                    min-height: 11px;
-                    letter-spacing: 0.3px;
-                "></div>
-                
-                <div id="dl-url-display" style="
+                <div id="dl-url-display" class="dl-url-hoverable" style="
                     font-size: 9.5px;
                     color: #747272;
                     background: none;
                     width: 100%;
                     padding: 0 6px;
+                    margin-top: 8px;
+                    margin-bottom: 4px;
                     box-sizing: border-box;
                     word-break: break-all;
                     max-height: 24px;
@@ -109,7 +112,7 @@
                     background-color: #313135;
                     color: #CACACA;
                     border: none;
-                    border-radius: 8px;
+                    border-radius: 5px;
                     cursor: pointer;
                     font-weight: 500;
                     font-size: 11px;
@@ -127,7 +130,7 @@
                     background-color: #675FA5;
                     color: #CECDFF;
                     border: none;
-                    border-radius: 8px;
+                    border-radius: 5px;
                     cursor: pointer;
                     font-weight: 500;
                     font-size: 11px;
@@ -142,6 +145,41 @@
             </div>
         </div>
         <style>
+            .dl-url-hoverable {
+                cursor: pointer;
+                position: relative;
+            }
+            .dl-url-hoverable:hover, .dl-url-hoverable.copied-anim {
+                -webkit-line-clamp: unset !important;
+                color: #ffffff !important;
+            }
+            .dl-url-hoverable::after {
+                content: '';
+                position: absolute;
+                top: 0; left: 0; right: 0; bottom: 0;
+                pointer-events: none;
+                mix-blend-mode: multiply;
+                background-size: 200% auto;
+                opacity: 0;
+            }
+            .dl-url-hoverable:hover:not(.copied-anim)::after {
+                opacity: 1;
+                background-image: linear-gradient(90deg, #747272 0%, #00f2fe 40%, #ff0050 60%, #747272 100%);
+                animation: shine-forward 1s ease-in-out forwards;
+            }
+            .dl-url-hoverable.copied-anim::after {
+                opacity: 1;
+                background-image: linear-gradient(90deg, #747272 0%, #ff0050 40%, #00f2fe 60%, #747272 100%);
+                animation: shine-reverse 1s ease-in-out forwards;
+            }
+            @keyframes shine-forward {
+                0% { background-position: 200% center; }
+                100% { background-position: -100% center; }
+            }
+            @keyframes shine-reverse {
+                0% { background-position: -100% center; }
+                100% { background-position: 200% center; }
+            }
             @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
             @keyframes dl-spin {
                 0% { transform: rotate(0deg); }
@@ -200,6 +238,22 @@
     // Close button
     closeBtn.onclick = () => ui.remove();
     
+    // Copy URL
+    urlDisplay.onclick = () => {
+        const textToCopy = currentUrl || urlDisplay.textContent;
+        if (textToCopy && !textToCopy.startsWith('Checking') && !textToCopy.startsWith('No video')) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalText = urlDisplay.textContent;
+                urlDisplay.textContent = 'Copied to clipboard!';
+                urlDisplay.classList.add('copied-anim');
+                setTimeout(() => {
+                    urlDisplay.textContent = originalText;
+                    urlDisplay.classList.remove('copied-anim');
+                }, 1500);
+            });
+        }
+    };
+    
     // ── Drag functionality ────────────────────────────────────────────
     const panel = document.getElementById('dl-panel');
     let isDragging = false;
@@ -207,8 +261,8 @@
     let dragOffsetY = 0;
     
     panel.addEventListener('mousedown', (e) => {
-        // Don't drag when clicking buttons
-        if (e.target.tagName === 'BUTTON') return;
+        // Don't drag when clicking buttons or url
+        if (e.target.tagName === 'BUTTON' || e.target.id === 'dl-url-display') return;
         isDragging = true;
         const rect = panel.getBoundingClientRect();
         dragOffsetX = e.clientX - rect.left;
@@ -1101,7 +1155,9 @@
         }
         
         if (isRecording) {
-            statusEl.textContent = '⚠ Already recording';
+            if (activeMediaRecorder && activeMediaRecorder.state !== 'inactive') {
+                activeMediaRecorder.stop();
+            }
             return;
         }
         
@@ -1116,6 +1172,7 @@
         try {
             const stream = currentVideo.captureStream();
             const mediaRecorder = new MediaRecorder(stream);
+            activeMediaRecorder = mediaRecorder;
             const chunks = [];
             
             mediaRecorder.ondataavailable = e => {
