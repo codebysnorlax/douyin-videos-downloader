@@ -1,73 +1,19 @@
-#!/usr/bin/env python3
-"""Generate simple extension icons as PNG files."""
-import struct
-import zlib
+import os
+from PIL import Image
 
-def create_png(width, height, rgba_data):
-    """Create a minimal PNG from RGBA data."""
-    def chunk(chunk_type, data):
-        c = chunk_type + data
-        return struct.pack('>I', len(data)) + c + struct.pack('>I', zlib.crc32(c) & 0xffffffff)
-    
-    raw = b''
-    for y in range(height):
-        raw += b'\x00'  # filter byte
-        raw += rgba_data[y * width * 4:(y + 1) * width * 4]
-    
-    compressed = zlib.compress(raw)
-    
-    sig = b'\x89PNG\r\n\x1a\n'
-    ihdr = struct.pack('>IIBBBBB', width, height, 8, 6, 0, 0, 0)
-    return sig + chunk(b'IHDR', ihdr) + chunk(b'IDAT', compressed) + chunk(b'IEND', b'')
+src_img = '/home/snorlax/.gemini/antigravity-ide/brain/4fdfcf14-9da2-4b6e-a189-ee7e45e79f07/douyin_icon_1784493348671.png'
+dest_dir = '/home/snorlax/Downloads/lab/douyin-downloader-ext/icons'
+sizes = [16, 48, 128]
 
-def draw_icon(size):
-    """Draw a download arrow icon with purple theme."""
-    data = bytearray(size * size * 4)
-    
-    cx, cy = size // 2, size // 2
-    radius = size // 2 - 1
-    
-    for y in range(size):
-        for x in range(size):
-            idx = (y * size + x) * 4
-            dx, dy = x - cx, y - cy
-            dist = (dx*dx + dy*dy) ** 0.5
-            
-            if dist <= radius:
-                # Background: purple gradient
-                t = dist / radius
-                r = int(103 * (1 - t * 0.3))
-                g = int(95 * (1 - t * 0.3))
-                b = int(165 * (1 - t * 0.2))
-                a = 255
-                
-                # Draw down arrow
-                arrow_w = size // 5
-                arrow_h = size // 3
-                stem_w = max(size // 8, 2)
-                
-                ax, ay = x - cx, y - cy + size // 8
-                
-                # Stem
-                if abs(ax) <= stem_w // 2 and -arrow_h <= ay <= 0:
-                    r, g, b = 206, 205, 255
-                # Arrow head
-                elif 0 <= ay <= arrow_w and abs(ax) <= (arrow_w - ay):
-                    r, g, b = 206, 205, 255
-                # Bottom bar
-                elif abs(ax) <= arrow_w + stem_w and abs(ay - arrow_w - stem_w) <= max(stem_w // 2, 1):
-                    r, g, b = 206, 205, 255
-                
-                data[idx:idx+4] = bytes([r, g, b, a])
-            else:
-                data[idx:idx+4] = bytes([0, 0, 0, 0])
-    
-    return bytes(data)
+if not os.path.exists(dest_dir):
+    os.makedirs(dest_dir)
 
-for sz in [16, 48, 128]:
-    pixels = draw_icon(sz)
-    png = create_png(sz, sz, pixels)
-    with open(f'icons/icon{sz}.png', 'wb') as f:
-        f.write(png)
-    print(f'Created icon{sz}.png ({len(png)} bytes)')
-
+try:
+    with Image.open(src_img) as img:
+        for size in sizes:
+            resized = img.resize((size, size), Image.Resampling.LANCZOS)
+            dest_path = os.path.join(dest_dir, f'icon{size}.png')
+            resized.save(dest_path, 'PNG')
+            print(f'Saved {dest_path}')
+except Exception as e:
+    print(f'Error: {e}')
