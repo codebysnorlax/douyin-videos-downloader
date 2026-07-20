@@ -2,7 +2,7 @@
 
 This extension helps download Douyin videos from the browser. It adds a small panel on the page that can detect the current video and provide a download option.
 
-![Popup](assets/ui.pngpng)
+![Popup](assets/ui.png)
 
 ## What it does
 
