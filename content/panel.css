@@ -1,0 +1,347 @@
+/*
+ * content/panel.css — Douyin Video Downloader panel styles.
+ *
+ * Single source of truth.  Merged from two previously-diverged sources:
+ *   1. styles.css          — the original standalone stylesheet (now deleted).
+ *   2. The <style> block that was inlined inside content.js's HTML template.
+ *
+ * This file is injected by the browser automatically via the content_scripts
+ * "css" key in manifest.json — no JavaScript is needed to attach it.
+ *
+ * Where the two sources disagreed, the inline-style values are used as
+ * authoritative (they were the values that actually rendered in the browser;
+ * styles.css referenced an unused element ID "#douyin-dl-ext").
+ */
+
+/* Google Fonts — must precede all rules; browser ignores @import after rules */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+
+/* ── Panel container ─────────────────────────────────────────────────────── */
+/*
+ * Fixed-position overlay panel injected into every Douyin page.
+ * z-index: 999999 pushes it above Douyin's own overlays (z-index ≈ 9999).
+ * The panel starts right-anchored (right: 20px) and switches to left/top
+ * absolute coordinates when dragged (handled by ui.js).
+ */
+#dl-panel {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 300px;
+    height: 142px;
+    background-color: #090A0A;
+    color: #ffffff;
+    box-sizing: border-box;
+    border-radius: 14px;
+    font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    z-index: 999999;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 10px 12px;
+    cursor: grab;
+    user-select: none;
+}
+
+/* Applied while the user is actively dragging the panel */
+#dl-panel.dragging {
+    cursor: grabbing;
+}
+
+/* Applied by the popup "Show Download Panel" toggle via togglePanel message */
+#dl-panel.hidden {
+    display: none;
+}
+
+/* ── Close button ────────────────────────────────────────────────────────── */
+.dl-btn-close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: #747272;
+    cursor: pointer;
+    font-size: 14px;
+    opacity: 0.6;
+    padding: 0;
+    line-height: 1;
+}
+.dl-btn-close:hover {
+    opacity: 1;
+}
+
+/* ── Header section ──────────────────────────────────────────────────────── */
+/* Flex column that stacks: title → status row → URL display */
+.dl-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 2px;
+    margin-top: 2px;
+}
+
+.dl-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: #ffffff;
+    letter-spacing: -0.2px;
+}
+
+/*
+ * Row that places the status text and the aweme-id side by side.
+ * align-items: baseline keeps the differently-sized text on the same
+ * visual baseline without explicit vertical alignment.
+ */
+.dl-status-row {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0 8px;
+    box-sizing: border-box;
+    align-items: baseline;
+    margin-top: 4px;
+}
+
+.dl-status {
+    font-size: 11px;
+    color: #675FA5;
+    font-weight: 500;
+    min-height: 14px; /* prevents layout shift when text changes */
+}
+
+.dl-aweme-id {
+    font-size: 9px;
+    color: #4a4a5a;
+    font-family: monospace;
+    min-height: 11px;
+    letter-spacing: 0.3px;
+}
+
+/* ── URL display ─────────────────────────────────────────────────────────── */
+/*
+ * Shows the resolved CDN URL (or a placeholder).  Clamped to 2 lines by
+ * default; the :hover rule in .dl-url-hoverable removes the clamp so the
+ * full URL is visible when the user moves their cursor over it.
+ */
+.dl-url-display {
+    font-size: 9.5px;
+    color: #747272;
+    background: none;
+    width: 100%;
+    padding: 0 6px;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    box-sizing: border-box;
+    word-break: break-all;
+    max-height: 24px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 12px;
+}
+
+/* ── URL hover / copy animation ──────────────────────────────────────────── */
+/*
+ * Hovering over the URL display reveals the full URL text and triggers a
+ * TikTok-brand-colour shimmer (cyan → red) moving left-to-right.
+ * Clicking copies the URL, which triggers a reversed shimmer (red → cyan)
+ * via the .copied-anim class toggled by ui.js.
+ *
+ * The shimmer is implemented as a ::after pseudo-element with a translucent
+ * gradient and mix-blend-mode: multiply, so it blends with the text beneath
+ * without fully obscuring it.
+ */
+.dl-url-hoverable {
+    cursor: pointer;
+    position: relative;
+}
+
+.dl-url-hoverable:hover,
+.dl-url-hoverable.copied-anim {
+    /* Remove line-clamp so the full URL is readable on hover / copy */
+    -webkit-line-clamp: unset !important;
+    line-clamp: unset !important;
+    color: #ffffff !important;
+}
+
+.dl-url-hoverable::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    mix-blend-mode: multiply;
+    background-size: 200% auto;
+    opacity: 0;
+}
+
+/* Forward shimmer: hover (cyan moves left-to-right) */
+.dl-url-hoverable:hover:not(.copied-anim)::after {
+    opacity: 1;
+    background-image: linear-gradient(90deg, #747272 0%, #00f2fe 40%, #ff0050 60%, #747272 100%);
+    animation: shine-forward 1s ease-in-out forwards;
+}
+
+/* Reverse shimmer: copied-anim class (red moves right-to-left) */
+.dl-url-hoverable.copied-anim::after {
+    opacity: 1;
+    background-image: linear-gradient(90deg, #747272 0%, #ff0050 40%, #00f2fe 60%, #747272 100%);
+    animation: shine-reverse 1s ease-in-out forwards;
+}
+
+@keyframes shine-forward {
+    0%   { background-position: 200% center; }
+    100% { background-position: -100% center; }
+}
+
+@keyframes shine-reverse {
+    0%   { background-position: -100% center; }
+    100% { background-position: 200% center; }
+}
+
+/* ── Button row ──────────────────────────────────────────────────────────── */
+.dl-btn-row {
+    display: flex;
+    gap: 12px;
+    width: 100%;
+    justify-content: center;
+}
+
+.dl-btn {
+    flex: 1;
+    height: 26px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 11px;
+    padding: 0 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    outline: none;
+    transition: all 0.2s;
+}
+
+.dl-btn:active {
+    transform: scale(0.96);
+}
+
+/* CSS disabled state — JS also sets opacity/cursor inline for explicit control */
+.dl-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    filter: grayscale(1);
+}
+
+/* Record / capture button */
+.dl-btn-record {
+    background-color: #313135;
+    color: #CACACA;
+}
+
+.dl-btn-record:not(:disabled):hover {
+    background-color: #414145;
+    color: #ffffff;
+}
+
+/* Download button */
+.dl-btn-download {
+    background-color: #675FA5;
+    color: #CECDFF;
+}
+
+.dl-btn-download:not(:disabled):hover {
+    background-color: #7B73B9;
+}
+
+/* ── Spinner ─────────────────────────────────────────────────────────────── */
+/*
+ * Injected dynamically by downloader.js while a download is in progress.
+ * The spinner is an element-level <span class="dl-spinner"> inserted before
+ * the button's text node.
+ */
+@keyframes dl-spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.dl-spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(206, 205, 255, 0.3);
+    border-top: 2px solid #CECDFF;
+    border-radius: 50%;
+    animation: dl-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+/* ── Status pulse animation ───────────────────────────────────────────────── */
+/* Applied to .dl-status when the extension is waiting for a video to appear */
+@keyframes dl-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+}
+
+.dl-status.scanning {
+    animation: dl-pulse 1.5s ease-in-out infinite;
+}
+
+/* ── Animated panel border (download / recording in progress) ────────────── */
+/*
+ * A TikTok-brand spinning conic-gradient border that plays while a download
+ * or recording is active.  Implemented with two pseudo-elements:
+ *
+ *   ::before — the rotating gradient (positioned to cover the full panel with
+ *              extra overflow so the corners are always filled)
+ *   ::after  — a solid fill that covers the interior, leaving only a thin
+ *              border strip visible around the panel edge
+ *
+ * The panel itself is set to background: transparent so ::after (the fill)
+ * shows through cleanly.  overflow: hidden clips the rotating ::before to the
+ * panel's border-radius.  z-index stacking keeps both pseudo-elements behind
+ * the panel's actual content.
+ */
+@keyframes dl-spin-border {
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.dl-panel-animating {
+    background: transparent !important;
+    position: relative;
+    overflow: hidden;
+    z-index: 0;
+}
+
+.dl-panel-animating::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 200%;
+    height: 500%;
+    /* Conic gradient: mostly transparent, with a thin TikTok-brand arc */
+    background: conic-gradient(transparent, transparent 70%, #ff0050 85%, #00f2fe 100%);
+    animation: dl-spin-border 2s linear infinite;
+    transform: translate(-50%, -50%) rotate(0deg);
+    z-index: -2;
+}
+
+.dl-panel-animating::after {
+    content: '';
+    position: absolute;
+    /* inset: 2px creates the visible border thickness */
+    inset: 2px;
+    background: #090A0A;
+    border-radius: 12px; /* slightly less than the panel's 14px for a clean edge */
+    z-index: -1;
+}
