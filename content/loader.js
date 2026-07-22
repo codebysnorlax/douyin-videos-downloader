@@ -8,8 +8,7 @@
  */
 (async () => {
     try {
-        const scriptUrl = chrome.runtime.getURL('content/index.js');
-        await import(scriptUrl);
+        await import(chrome.runtime.getURL('content/index.js'));
     } catch (err) {
         console.error('[Douyin Downloader] Failed to load content script module:', err);
     }
