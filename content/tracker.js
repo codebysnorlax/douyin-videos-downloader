@@ -25,6 +25,12 @@ import {
 // preventing duplicate concurrent requests for the same video
 const pendingFetches = new Set();
 
+let lastTrackedVideo = null;
+let lastTrackedAwemeId = null;
+
+let scrollTimer = null;
+let mutationTimer = null;
+
 // ── Core tracking logic ───────────────────────────────────────────────────────
 
 /**
@@ -63,19 +69,24 @@ export function trackVideo() {
     });
 
     if (bestVideo) {
-        const isSameVideo = (bestVideo === state.currentVideo);
+        const awemeId = getAwemeIdFromVideoElement(bestVideo);
+        const isNewVideo = (bestVideo !== state.currentVideo);
+        const isNewAwemeId = (awemeId !== lastTrackedAwemeId);
+
         state.currentVideo = bestVideo;
 
         // Always refresh the aweme-id display even if the video element hasn't
         // changed — the ID sometimes resolves after the first trackVideo() call
-        const awemeId = getAwemeIdFromVideoElement(bestVideo);
         refs.awemeIdEl.textContent = awemeId ? `ID: ${awemeId}` : 'ID: not found';
 
-        if (!isSameVideo || !state.currentUrl) {
-            // Either a new video is visible, or we haven't found the URL yet
+        if (isNewVideo || isNewAwemeId) {
+            lastTrackedVideo = bestVideo;
+            lastTrackedAwemeId = awemeId;
             state.currentUrl = null;
             console.log('[Douyin DL] Visible video aweme_id:', awemeId);
+        }
 
+        if (!state.currentUrl) {
             // ── Strategy 1: intercepted feed-API map (fastest) ───────────────
             // network.js populates this as Douyin loads feed responses;
             // by the time the user can click Download it is usually populated
@@ -119,10 +130,14 @@ export function trackVideo() {
 
     } else {
         // No qualifying video on screen
-        state.currentVideo = null;
-        state.currentUrl   = null;
-        refs.awemeIdEl.textContent = '';
-        updateUI();
+        if (state.currentVideo || state.currentUrl || lastTrackedVideo || lastTrackedAwemeId) {
+            state.currentVideo = null;
+            state.currentUrl   = null;
+            lastTrackedVideo   = null;
+            lastTrackedAwemeId = null;
+            refs.awemeIdEl.textContent = '';
+            updateUI();
+        }
     }
 }
 
@@ -191,7 +206,8 @@ async function fetchAwemeDetail(awemeId) {
 export function setupListeners() {
     // Scroll: debounce by 100 ms — frequent during feed scrolling
     window.addEventListener('scroll', () => {
-        setTimeout(trackVideo, 100);
+        if (scrollTimer) clearTimeout(scrollTimer);
+        scrollTimer = setTimeout(trackVideo, 100);
     }, { passive: true });
 
     // Play: use capture phase so we see the event before Douyin's own handlers
@@ -201,9 +217,10 @@ export function setupListeners() {
 
     // MutationObserver: detects SPA route changes and new video elements
     const observer = new MutationObserver(() => {
-        // 500 ms delay: wait for Douyin's React reconciliation to finish
+        // 500 ms debounce: wait for Douyin's React reconciliation to finish
         // rendering the new video element before we try to inspect it
-        setTimeout(trackVideo, 500);
+        if (mutationTimer) clearTimeout(mutationTimer);
+        mutationTimer = setTimeout(trackVideo, 500);
     });
     observer.observe(document.body, { childList: true, subtree: true });
 }
