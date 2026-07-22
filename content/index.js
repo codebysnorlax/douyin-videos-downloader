@@ -35,6 +35,13 @@ if (existing) existing.remove();
 // ── Panel creation ────────────────────────────────────────────────────────────
 createPanel();
 
+// Respect user's saved panel visibility preference
+chrome.storage.local.get(['showPanel'], (result) => {
+    if (result.showPanel === false && refs.panel) {
+        refs.panel.style.display = 'none';
+    }
+});
+
 // ── Button handlers ───────────────────────────────────────────────────────────
 // Wired here (not in ui.js) so that ui.js has no dependency on downloader.js
 // or recorder.js, keeping the dependency graph acyclic
@@ -56,9 +63,20 @@ setTimeout(() => {
 // ── Popup message handler ─────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'togglePanel') {
-        const panel = document.getElementById('dl-panel');
-        if (panel) {
-            panel.style.display = message.enabled ? '' : 'none';
+        let panel = document.getElementById('dl-panel');
+        if (message.enabled) {
+            if (!panel) {
+                createPanel();
+                refs.downloadBtn.onclick = downloadVideo;
+                refs.captureBtn.onclick  = captureVideo;
+            } else {
+                panel.style.display = '';
+            }
+            updateUI();
+        } else {
+            if (panel) {
+                panel.style.display = 'none';
+            }
         }
     }
     if (message.action === 'download') {

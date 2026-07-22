@@ -93,10 +93,11 @@ export function createPanel() {
     refs.closeBtn    = document.getElementById('dl-btn-close');
     refs.awemeIdEl   = document.getElementById('dl-aweme-id');
 
-    // Remove the panel from the DOM when the close button is clicked.
-    // index.js's de-duplication guard ensures a fresh panel is created on
-    // next injection rather than showing a stale hidden one.
-    refs.closeBtn.onclick = () => ui.remove();
+    // Hide panel and sync preference with chrome.storage.local on close
+    refs.closeBtn.onclick = () => {
+        if (refs.panel) refs.panel.style.display = 'none';
+        chrome.storage.local.set({ showPanel: false });
+    };
 
     // Click the URL display to copy the resolved CDN URL to clipboard.
     // Only copies when a real URL is shown (not the placeholder text).
