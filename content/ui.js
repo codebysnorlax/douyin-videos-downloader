@@ -37,6 +37,7 @@ export const refs = {
 };
 
 let lastAutoCopiedUrl = null;
+let isCopyingFeedback = false;
 
 // ── Panel creation ─────────────────────────────────────────────────────────────
 
@@ -104,22 +105,43 @@ export function createPanel() {
         if (
             textToCopy &&
             !textToCopy.startsWith('Checking') &&
-            !textToCopy.startsWith('No video')
+            !textToCopy.startsWith('No video') &&
+            !textToCopy.startsWith('Copied')
         ) {
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                const originalText = refs.urlDisplay.textContent;
-                refs.urlDisplay.textContent = 'Copied to clipboard!';
-                // Triggers the reverse-shimmer CSS animation defined in panel.css
-                refs.urlDisplay.classList.add('copied-anim');
-                setTimeout(() => {
-                    refs.urlDisplay.textContent = originalText;
-                    refs.urlDisplay.classList.remove('copied-anim');
-                }, 1500);
-            });
+            // Write to clipboard with fallback
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy).catch(() => {
+                    _copyFallback(textToCopy);
+                });
+            } else {
+                _copyFallback(textToCopy);
+            }
+
+            isCopyingFeedback = true;
+            refs.urlDisplay.textContent = 'Copied link';
+            refs.urlDisplay.classList.add('copied-anim');
+            setTimeout(() => {
+                isCopyingFeedback = false;
+                refs.urlDisplay.classList.remove('copied-anim');
+                updateUI();
+            }, 1000);
         }
     };
 
     _setupDrag(refs.panel);
+}
+
+function _copyFallback(text) {
+    try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+    } catch (e) {}
 }
 
 // ── Drag implementation ────────────────────────────────────────────────────────
@@ -231,9 +253,10 @@ export function updateUI() {
 
     if (state.currentUrl && !state.currentUrl.startsWith('blob:')) {
         // ── Direct CDN URL is available ────────────────────────────────────
+        refs.statusEl.classList.remove('scanning');
         refs.statusEl.textContent   = 'Direct URL found!';
         refs.statusEl.style.color   = '#675FA5';
-        refs.urlDisplay.textContent = state.currentUrl;
+        if (!isCopyingFeedback) refs.urlDisplay.textContent = state.currentUrl;
         refs.downloadBtn.style.opacity = '1';
         refs.downloadBtn.style.cursor  = 'pointer';
         refs.downloadBtn.disabled      = false;
@@ -253,9 +276,10 @@ export function updateUI() {
     } else if (isBlob) {
         // ── Video is an MSE blob stream — no direct URL extractable ────────
         // The MediaRecorder path is the only viable download strategy here
+        refs.statusEl.classList.remove('scanning');
         refs.statusEl.textContent   = 'Stream video(blob) -use Record';
         refs.statusEl.style.color   = '#675FA5';
-        refs.urlDisplay.textContent = state.currentVideo.src || '';
+        if (!isCopyingFeedback) refs.urlDisplay.textContent = state.currentVideo.src || '';
         refs.downloadBtn.style.opacity = '0.5';
         refs.downloadBtn.style.cursor  = 'not-allowed';
         refs.downloadBtn.disabled      = true;
