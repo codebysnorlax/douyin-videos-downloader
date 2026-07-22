@@ -36,6 +36,8 @@ export const refs = {
     ui: null,
 };
 
+let lastAutoCopiedUrl = null;
+
 // ── Panel creation ─────────────────────────────────────────────────────────────
 
 /**
@@ -238,6 +240,15 @@ export function updateUI() {
         refs.captureBtn.style.opacity  = '0.5';
         refs.captureBtn.style.cursor   = 'not-allowed';
         refs.captureBtn.disabled       = true;
+
+        if (state.currentUrl !== lastAutoCopiedUrl) {
+            chrome.storage.local.get(['autoCopy'], (res) => {
+                if (res.autoCopy) {
+                    lastAutoCopiedUrl = state.currentUrl;
+                    navigator.clipboard.writeText(state.currentUrl).catch(() => {});
+                }
+            });
+        }
 
     } else if (isBlob) {
         // ── Video is an MSE blob stream — no direct URL extractable ────────

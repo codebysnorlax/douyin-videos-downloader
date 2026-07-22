@@ -244,6 +244,15 @@ export function isValidVideoBlob(blob) {
     return true;
 }
 
+export function recordDownloadCount() {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.get(['downloadCount'], (res) => {
+            const count = (res.downloadCount || 0) + 1;
+            chrome.storage.local.set({ downloadCount: count });
+        });
+    }
+}
+
 /**
  * Trigger a browser file-save dialog for a Blob by creating a temporary
  * object URL, clicking a hidden <a download> link, and revoking the URL
@@ -253,6 +262,7 @@ export function isValidVideoBlob(blob) {
  * @param {string} filename
  */
 export function triggerBlobDownload(blob, filename) {
+    recordDownloadCount();
     const blobUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href     = blobUrl;

@@ -54,20 +54,29 @@ setTimeout(() => {
 }, 1000);
 
 // ── Popup message handler ─────────────────────────────────────────────────────
-// Handles togglePanel / toggleDetect messages sent by popup.js when the user
-// changes settings in the extension popup
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'togglePanel') {
         const panel = document.getElementById('dl-panel');
         if (panel) {
             panel.style.display = message.enabled ? '' : 'none';
         }
     }
-    if (message.action === 'toggleDetect') {
-        // autoDetect is a popup-only preference; when disabled we stop the
-        // initial auto-scan but leave existing state intact so the user can
-        // still manually trigger a download
-        chrome.storage.local.set({ autoDetect: message.enabled });
+    if (message.action === 'download') {
+        downloadVideo();
+    }
+    if (message.action === 'capture') {
+        captureVideo();
+    }
+    if (message.action === 'rescan') {
+        trackVideo();
+        updateUI();
+    }
+    if (message.action === 'getStatus') {
+        sendResponse({
+            hasVideo: !!state.currentVideo,
+            url: state.currentUrl,
+            isRecording: state.isRecording
+        });
     }
 });
 

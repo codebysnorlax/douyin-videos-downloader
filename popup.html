@@ -1,64 +1,300 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Douyin Video Downloader</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
   <style>
-    body {
-      width: 220px;
-      padding: 15px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background-color: #0F0F12;
-      color: #ffffff;
+    * {
+      box-sizing: border-box;
       margin: 0;
+      padding: 0;
     }
+
+    body {
+      width: 320px;
+      padding: 16px;
+      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: #090A0A;
+      color: #FFFFFF;
+      user-select: none;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────────────── */
     .header {
       display: flex;
       align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #1E1F28;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
       gap: 10px;
-      margin-bottom: 15px;
     }
-    .header img {
-      width: 24px;
-      height: 24px;
+
+    .brand img {
+      width: 28px;
+      height: 28px;
+      filter: drop-shadow(0 2px 6px rgba(103, 95, 165, 0.4));
     }
-    .header h1 {
-      font-size: 16px;
-      margin: 0;
+
+    .brand-title {
+      font-size: 15px;
       font-weight: 600;
+      color: #FFFFFF;
+      letter-spacing: -0.2px;
     }
+
+    .badge-ver {
+      font-size: 10px;
+      font-weight: 600;
+      color: #675FA5;
+      background: rgba(103, 95, 165, 0.15);
+      border: 1px solid rgba(103, 95, 165, 0.3);
+      padding: 2px 7px;
+      border-radius: 10px;
+    }
+
+    /* ── Stats Banner ─────────────────────────────────────────────────────── */
+    .stats-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(135deg, rgba(103, 95, 165, 0.2) 0%, rgba(20, 21, 27, 0.8) 100%);
+      border: 1px solid rgba(103, 95, 165, 0.3);
+      border-radius: 10px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+    }
+
+    .stat-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stat-lbl {
+      font-size: 10px;
+      font-weight: 500;
+      color: #A1A1B3;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .stat-val {
+      font-size: 18px;
+      font-weight: 700;
+      color: #00F2FE;
+      line-height: 22px;
+    }
+
+    .stat-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ── Status Card ──────────────────────────────────────────────────────── */
+    .status-card {
+      background: #14151B;
+      border: 1px solid #1E1F28;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+
+    .status-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #747272;
+    }
+
+    .dot.active {
+      background: #00F2FE;
+      box-shadow: 0 0 8px #00F2FE;
+    }
+
+    .dot.warning {
+      background: #FF9F43;
+      box-shadow: 0 0 8px #FF9F43;
+    }
+
+    .status-text {
+      color: #E1E1E6;
+    }
+
+    .status-detail {
+      font-size: 10.5px;
+      color: #8C8C9A;
+      word-break: break-all;
+      max-height: 28px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 14px;
+    }
+
+    /* ── Action Buttons ────────────────────────────────────────────────────── */
+    .actions-grid {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .btn-action {
+      flex: 1;
+      height: 34px;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+
+    .btn-action:active {
+      transform: scale(0.97);
+    }
+
+    .btn-action:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .btn-download {
+      background: #675FA5;
+      color: #FFFFFF;
+    }
+
+    .btn-download:not(:disabled):hover {
+      background: #7B73B9;
+    }
+
+    .btn-record {
+      background: #252733;
+      color: #CACACA;
+      border: 1px solid #323545;
+    }
+
+    .btn-record:not(:disabled):hover {
+      background: #323545;
+      color: #FFFFFF;
+    }
+
+    .btn-rescan {
+      width: 34px;
+      height: 34px;
+      flex: 0 0 34px;
+      background: #252733;
+      border: 1px solid #323545;
+      color: #CACACA;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .btn-rescan:hover {
+      background: #323545;
+      color: #FFFFFF;
+    }
+
+    .rescan-svg {
+      transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .rescan-svg.spin {
+      transform: rotate(360deg);
+    }
+
+    /* ── Settings Controls ────────────────────────────────────────────────── */
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6C6C7D;
+      margin-bottom: 8px;
+    }
+
     .setting-row {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 12px;
+      background: #14151B;
+      border: 1px solid #1E1F28;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 8px;
     }
+
+    .setting-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
     .setting-label {
-      font-size: 13px;
-      color: #A1A1B3;
+      font-size: 12px;
+      font-weight: 500;
+      color: #E1E1E6;
     }
-    /* Toggle switch */
+
+    .setting-desc {
+      font-size: 10px;
+      color: #747272;
+    }
+
+    /* Toggle Switch */
     .switch {
       position: relative;
       display: inline-block;
-      width: 34px;
+      width: 36px;
       height: 20px;
     }
+
     .switch input {
       opacity: 0;
       width: 0;
       height: 0;
     }
+
     .slider {
       position: absolute;
       cursor: pointer;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
+      top: 0; left: 0; right: 0; bottom: 0;
       background-color: #2F2F3D;
-      transition: .4s;
+      transition: .3s ease;
       border-radius: 20px;
     }
+
     .slider:before {
       position: absolute;
       content: "";
@@ -66,52 +302,185 @@
       width: 14px;
       left: 3px;
       bottom: 3px;
-      background-color: #ffffff;
-      transition: .4s;
+      background-color: #FFFFFF;
+      transition: .3s ease;
       border-radius: 50%;
     }
+
     input:checked + .slider {
       background-color: #675FA5;
     }
+
     input:checked + .slider:before {
-      transform: translateX(14px);
+      transform: translateX(16px);
     }
-    .footer {
-      margin-top: 20px;
-      font-size: 11px;
-      color: #4a4a5a;
-      text-align: center;
-      border-top: 1px solid #1F1F25;
-      padding-top: 10px;
+
+    /* ── Quick Links ──────────────────────────────────────────────────────── */
+    .links-grid {
+      display: flex;
+      gap: 6px;
+      margin-top: 12px;
+      margin-bottom: 14px;
     }
-    .btn-help {
-      display: block;
-      width: 100%;
-      background: #1F1F25;
+
+    .btn-link {
+      flex: 1;
+      height: 32px;
+      background: #14151B;
+      border: 1px solid #1E1F28;
+      border-radius: 8px;
       color: #A1A1B3;
-      border: none;
-      padding: 8px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12px;
-      margin-top: 10px;
       text-decoration: none;
+      font-size: 10.5px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-link:hover {
+      background: #1E1F28;
+      color: #FFFFFF;
+      border-color: #323545;
+    }
+
+    /* Google Gemini ambient gradient border for Douyin button */
+    .btn-link-douyin {
+      position: relative;
+      background: #14151B;
+      color: #FFFFFF !important;
+      border-radius: 8px;
+      border: 1px solid transparent !important;
+      z-index: 1;
+      transition: background 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .btn-link-douyin::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 9px;
+      padding: 1.2px;
+      background: linear-gradient(
+        120deg,
+        #FE2C55 0%,
+        #FF007F 35%,
+        #00F2FE 70%,
+        #FE2C55 100%
+      );
+      background-size: 300% 300%;
+      animation: gemini-glow 3.5s ease infinite;
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+              mask-composite: exclude;
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .btn-link-douyin:hover {
+      background: #1E1F28;
+      box-shadow: 0 0 10px rgba(254, 44, 85, 0.25);
+    }
+
+    @keyframes gemini-glow {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* ── Footer ───────────────────────────────────────────────────────────── */
+    .footer {
+      border-top: 1px solid #1E1F28;
+      padding-top: 10px;
+      font-size: 10.5px;
+      color: #5C5C6E;
       text-align: center;
     }
-    .btn-help:hover {
-      background: #2F2F3D;
-      color: #ffffff;
+
+    .footer a {
+      color: #675FA5;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
     }
   </style>
 </head>
 <body>
+
+  <!-- Header -->
   <div class="header">
-    <img src="icons/icon48.png" alt="logo">
-    <h1>Douyin Downloader</h1>
+    <div class="brand">
+      <img src="icons/icon48.png" alt="Douyin Downloader Logo">
+      <span class="brand-title">Douyin Downloader</span>
+    </div>
+    <span class="badge-ver">v1.1.0</span>
   </div>
 
+  <!-- Download Counter Stats Card -->
+  <div class="stats-row">
+    <div class="stat-info">
+      <span class="stat-lbl">Total Videos Downloaded</span>
+      <span id="stat-downloads" class="stat-val">0</span>
+    </div>
+    <span class="stat-icon">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00F2FE" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+    </span>
+  </div>
+
+  <!-- Status Card -->
+  <div class="status-card">
+    <div class="status-header">
+      <div class="status-indicator">
+        <span id="status-dot" class="dot"></span>
+        <span id="status-text" class="status-text">Checking active tab...</span>
+      </div>
+    </div>
+    <div id="status-detail" class="status-detail">Open Douyin to start downloading videos.</div>
+  </div>
+
+  <!-- Quick Action Buttons -->
+  <div class="actions-grid">
+    <button id="btn-download" class="btn-action btn-download" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      <span>Download</span>
+    </button>
+    <button id="btn-record" class="btn-action btn-record" disabled>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="10"></circle>
+        <circle cx="12" cy="12" r="4" fill="#FF5252"></circle>
+      </svg>
+      <span>Record</span>
+    </button>
+    <button id="btn-rescan" class="btn-rescan" title="Rescan page videos">
+      <svg class="rescan-svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M23 4v6h-6"></path>
+        <path d="M1 20v-6h6"></path>
+        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Extension Settings -->
+  <div class="section-title">Controls & Preferences</div>
+
   <div class="setting-row">
-    <span class="setting-label">Show Download Panel</span>
+    <div class="setting-info">
+      <span class="setting-label">Floating Panel</span>
+      <span class="setting-desc">Show download panel on page</span>
+    </div>
     <label class="switch">
       <input type="checkbox" id="toggle-panel" checked>
       <span class="slider"></span>
@@ -119,17 +488,47 @@
   </div>
 
   <div class="setting-row">
-    <span class="setting-label">Auto-detect Videos</span>
+    <div class="setting-info">
+      <span class="setting-label">Auto-Copy Link</span>
+      <span class="setting-desc">Copy CDN URL automatically when ready</span>
+    </div>
     <label class="switch">
-      <input type="checkbox" id="toggle-detect" checked>
+      <input type="checkbox" id="toggle-autocopy">
       <span class="slider"></span>
     </label>
   </div>
 
-  <a href="https://www.douyin.com" target="_blank" class="btn-help">Open Douyin</a>
+  <!-- Quick Links -->
+  <div class="links-grid">
+    <a href="https://www.douyin.com" target="_blank" class="btn-link btn-link-douyin">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18V5l12-2v13"></path>
+        <circle cx="6" cy="18" r="3"></circle>
+        <circle cx="18" cy="16" r="3"></circle>
+      </svg>
+      <span>Douyin</span>
+    </a>
+    <a href="https://www.instagram.com/nr_snorlax" target="_blank" class="btn-link">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+        <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+      </svg>
+      <span>Instagram</span>
+    </a>
+    <a href="https://www.linkedin.com/in/codebysnorlax" target="_blank" class="btn-link">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"></path>
+        <rect x="2" y="9" width="4" height="12"></rect>
+        <circle cx="4" cy="4" r="2"></circle>
+      </svg>
+      <span>LinkedIn</span>
+    </a>
+  </div>
 
+  <!-- Footer -->
   <div class="footer">
-    Version 1.1.0 • By <a href="https://github.com/codebysnorlax" target="_blank">Snorlax</a>
+    Douyin Downloader v1.1.0 • By <a href="https://www.instagram.com/nr_snorlax" target="_blank">nr_snorlax</a>
   </div>
 
   <script src="popup.js"></script>

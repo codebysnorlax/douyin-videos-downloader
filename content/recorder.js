@@ -19,6 +19,7 @@
 
 import { state } from './state.js';
 import { refs, updateUI, getFormattedTimestamp } from './ui.js';
+import { recordDownloadCount } from './downloader.js';
 
 /**
  * Toggle video capture for the currently-tracked video element.
@@ -79,6 +80,7 @@ export async function captureVideo() {
             a.download = `${getFormattedTimestamp()}.webm`;
             a.click();
             URL.revokeObjectURL(url);
+            recordDownloadCount();
 
             // Reset all recording-related state
             state.isRecording          = false;
