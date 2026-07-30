@@ -58,7 +58,6 @@ async function handleDownload(message, sender, sendResponse) {
         });
         sendResponse({ success: true, downloadId });
     } catch (e) {
-        console.error('[Douyin DL Background] Download error:', e.message);
         sendResponse({ success: false, error: e.message });
     }
 }
@@ -98,7 +97,7 @@ async function handleFetchVideo(message, sender, sendResponse) {
                 const success = await downloadOne(url, noteFilename);
                 if (success) successCount++;
             } catch (e) {
-                console.warn(`[Douyin DL Background] Note img ${i + 1} failed:`, e.message);
+                // silently skip failed images
             }
         }
         sendResponse({ success: successCount > 0, count: successCount });
@@ -114,9 +113,8 @@ async function handleFetchVideo(message, sender, sendResponse) {
                 sendResponse({ success: true, urlIndex: i });
                 return;
             }
-            console.warn(`[Douyin DL Background] URL ${i + 1}/${urls.length} failed`);
         } catch (e) {
-            console.warn(`[Douyin DL Background] URL ${i + 1}/${urls.length} error:`, e.message);
+            // silently ignore — try next URL
         }
     }
 

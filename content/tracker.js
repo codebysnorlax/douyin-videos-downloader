@@ -83,7 +83,6 @@ export function trackVideo() {
             lastTrackedVideo = bestVideo;
             lastTrackedAwemeId = awemeId;
             state.currentUrl = null;
-            console.log('[Douyin DL] Visible video aweme_id:', awemeId);
         }
 
         if (!state.currentUrl) {
@@ -92,7 +91,6 @@ export function trackVideo() {
             // by the time the user can click Download it is usually populated
             if (awemeId && videoUrlMap.has(awemeId)) {
                 state.currentUrl = videoUrlMap.get(awemeId)[0];
-                console.log(`[Douyin DL] URL from API map (${videoUrlMap.get(awemeId).length} URLs available)`);
             }
 
             // ── Strategy 2: SSR page-data with confirmed aweme_id ────────────
@@ -103,7 +101,6 @@ export function trackVideo() {
                 const pageUrl = getVideoUrlFromPageData(awemeId);
                 if (pageUrl) {
                     state.currentUrl = pageUrl;
-                    console.log('[Douyin DL] URL from page data');
                 }
             }
 
@@ -114,7 +111,6 @@ export function trackVideo() {
                 const pageUrl = getVideoUrlFromPageData(null);
                 if (pageUrl) {
                     state.currentUrl = pageUrl;
-                    console.log('[Douyin DL] URL from page data (single video)');
                 }
             }
 
@@ -175,12 +171,11 @@ async function fetchAwemeDetail(awemeId) {
             // Check if the response gave us the URL
             if (videoUrlMap.has(awemeId)) {
                 state.currentUrl = videoUrlMap.get(awemeId)[0];
-                console.log('[Douyin DL] URL from API detail fetch');
                 updateUI();
             }
         }
     } catch (e) {
-        console.warn('[Douyin DL] API detail fetch failed:', e.message);
+        // silently ignore — network failures are expected on some pages
     } finally {
         // Always remove from pending set so a future retry is possible
         pendingFetches.delete(awemeId);

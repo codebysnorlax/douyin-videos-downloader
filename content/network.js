@@ -170,7 +170,6 @@ export function parseAwemeListFromResponse(data) {
 
             if (allUrls.length > 0) {
                 videoUrlMap.set(id, allUrls);
-                console.log(`[Douyin DL] Mapped: ${id} → ${allUrls.length} URLs (${allUrls[0].substring(0, 60)}...)`);
             }
         }
     }
@@ -203,7 +202,6 @@ export function parseAwemeListFromResponse(data) {
             });
             if (allUrls.length > 0) {
                 videoUrlMap.set(id, allUrls);
-                console.log(`[Douyin DL] Mapped detail: ${id} → ${allUrls.length} URLs`);
             }
         }
     }

@@ -125,8 +125,3 @@ window.dld = {
     ui: refs.ui,
 };
 
-console.log(
-    '%c[Douyin Downloader] Active! UI added to page.',
-    'color: #00ff00; font-size: 14px;'
-);
-console.log('Commands: dld.download() | dld.capture() | dld.url | dld.map | dld.rescan()');

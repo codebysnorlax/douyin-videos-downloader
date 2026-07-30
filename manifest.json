@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Douyin Video Downloader",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Download Douyin videos without watermark. Automatically detects the current video and provides one-click download.",
   "icons": {
     "16": "icons/icon16.png",

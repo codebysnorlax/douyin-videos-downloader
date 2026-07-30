@@ -153,9 +153,9 @@ async function fetchDownload(url, filename) {
                         return true;
                     }
                 }
-                console.warn(`[Douyin DL] URL ${i + 1} returned ${response.status} (${new URL(tryUrl).hostname})`);
+                // silently ignore — try the next URL
             } catch (e) {
-                console.warn(`[Douyin DL] URL ${i + 1} failed:`, e.message);
+                // silently ignore — try the next URL
             }
         }
         return false;
@@ -171,7 +171,6 @@ async function fetchDownload(url, filename) {
         if (!urlsToTry.includes(url)) urlsToTry.unshift(url);
     }
 
-    console.log(`[Douyin DL] Round 1: Trying ${urlsToTry.length} URLs...`);
     if (await tryUrls(urlsToTry)) return;
 
     // ── Round 2: Refresh the URL list from the detail API ────────────────────
@@ -179,7 +178,6 @@ async function fetchDownload(url, filename) {
     // means the token expired.  Re-fetching the detail API gives us a fresh
     // www.douyin.com proxy URL that doesn't expire as quickly.
     if (awemeId) {
-        console.log('[Douyin DL] Round 2: Fetching detail API for same-origin URLs...');
         refs.statusEl.textContent = '⬇ Fetching fresh URLs...';
 
         try {
@@ -195,14 +193,13 @@ async function fetchDownload(url, filename) {
                 parseAwemeListFromResponse(data);
             }
         } catch (e) {
-            console.warn('[Douyin DL] Detail API fetch failed:', e.message);
+            // silently ignore — fresh URL fetch is best-effort
         }
 
         // Try only the newly-arrived URLs (already tried the old ones in Round 1)
         if (videoUrlMap.has(awemeId)) {
             const newUrls = videoUrlMap.get(awemeId).filter(u => !urlsToTry.includes(u));
             if (newUrls.length > 0) {
-                console.log(`[Douyin DL] Round 2: Got ${newUrls.length} new URLs`);
                 if (await tryUrls(newUrls)) return;
             }
         }
