@@ -93,10 +93,10 @@ export function createPanel() {
     refs.closeBtn    = document.getElementById('dl-btn-close');
     refs.awemeIdEl   = document.getElementById('dl-aweme-id');
 
-    // Hide panel and sync preference with chrome.storage.local on close
+    // Hide panel for this page session only — do NOT persist showPanel: false
+    // so the panel re-appears automatically the next time the user visits Douyin.
     refs.closeBtn.onclick = () => {
         if (refs.panel) refs.panel.style.display = 'none';
-        chrome.storage.local.set({ showPanel: false });
     };
 
     // Click the URL display to copy the resolved CDN URL to clipboard.

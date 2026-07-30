@@ -135,16 +135,11 @@
     margin-top: 8px;
     margin-bottom: 4px;
     box-sizing: border-box;
-    word-break: break-all;
-    height: 24px;
-    max-height: 24px;
+    white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     text-align: center;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 12px;
+    line-height: 14px;
 }
 
 /* ── URL hover / copy ─────────────────────────────────────────────────────── */
