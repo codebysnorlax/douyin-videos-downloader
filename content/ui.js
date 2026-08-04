@@ -255,7 +255,7 @@ export function updateUI() {
     if (state.currentUrl && !state.currentUrl.startsWith('blob:')) {
         // ── Direct CDN URL is available ────────────────────────────────────
         refs.statusEl.classList.remove('scanning');
-        refs.statusEl.textContent   = 'Direct URL found!';
+        refs.statusEl.textContent   = 'URL found!';
         refs.statusEl.style.color   = '#675FA5';
         if (!isCopyingFeedback) refs.urlDisplay.textContent = state.currentUrl;
         refs.downloadBtn.style.opacity = '1';
