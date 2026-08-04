@@ -2,6 +2,8 @@
 
 This extension helps download Douyin videos from the browser. It adds a small panel on the page that can detect the current video and provide a download option.
 
+[try it ;)](https://addons.mozilla.org/addon/douyin-videos-downloader/)
+
 ![Popup](assets/ui.png)
 
 ## What it does
