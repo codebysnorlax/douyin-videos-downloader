@@ -145,15 +145,15 @@ function _copyFallback(text) {
     } catch (e) {}
 }
 
-// ── Drag implementation ────────────────────────────────────────────────────────
-
 /**
  * Make the panel draggable within the viewport.
  *
  * Douyin's own scroll event listeners would interfere with a standard CSS
  * draggable so we implement it manually via mousedown / mousemove / mouseup.
+ * Touch equivalents (touchstart / touchmove / touchend) are wired in parallel
+ * so the panel can be dragged with a finger on Android.
  *
- * On mousedown we switch from right-anchored (CSS `right: 20px`) to
+ * On mousedown/touchstart we switch from right-anchored (CSS `right: 20px`) to
  * left-anchored positioning so that the panel follows absolute pixel coords
  * during the drag without jumping.  We also clamp the final position to the
  * viewport bounds so the panel can never be dragged fully off-screen.
@@ -165,42 +165,59 @@ function _setupDrag(panelEl) {
     let dragOffsetX = 0;
     let dragOffsetY = 0;
 
-    panelEl.addEventListener('mousedown', (e) => {
-        // Don't start a drag when the user clicks a button or the URL display
-        if (e.target.tagName === 'BUTTON' || e.target.id === 'dl-url-display') return;
-
+    function startDrag(clientX, clientY, target) {
+        if (target.tagName === 'BUTTON' || target.id === 'dl-url-display') return;
         isDragging = true;
         const rect  = panelEl.getBoundingClientRect();
-        dragOffsetX = e.clientX - rect.left;
-        dragOffsetY = e.clientY - rect.top;
-
-        // Switch to left/top absolute positioning so we can move with the cursor.
-        // Keep right: auto so it doesn't fight with the CSS right: 20px default.
+        dragOffsetX = clientX - rect.left;
+        dragOffsetY = clientY - rect.top;
         panelEl.style.left  = rect.left + 'px';
         panelEl.style.top   = rect.top  + 'px';
         panelEl.style.right = 'auto';
         panelEl.classList.add('dragging');
-        e.preventDefault();
-    });
+    }
 
-    document.addEventListener('mousemove', (e) => {
+    function moveDrag(clientX, clientY) {
         if (!isDragging) return;
-        let newX = e.clientX - dragOffsetX;
-        let newY = e.clientY - dragOffsetY;
-        // Clamp to viewport so the panel stays reachable
+        let newX = clientX - dragOffsetX;
+        let newY = clientY - dragOffsetY;
         newX = Math.max(0, Math.min(newX, window.innerWidth  - panelEl.offsetWidth));
         newY = Math.max(0, Math.min(newY, window.innerHeight - panelEl.offsetHeight));
         panelEl.style.left  = newX + 'px';
         panelEl.style.top   = newY + 'px';
         panelEl.style.right = 'auto';
-    });
+    }
 
-    document.addEventListener('mouseup', () => {
+    function endDrag() {
         if (isDragging) {
             isDragging = false;
             panelEl.classList.remove('dragging');
         }
+    }
+
+    // ── Mouse events (desktop) ─────────────────────────────────────────────────
+    panelEl.addEventListener('mousedown', (e) => {
+        startDrag(e.clientX, e.clientY, e.target);
+        e.preventDefault();
     });
+    document.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
+    document.addEventListener('mouseup',   endDrag);
+
+    // ── Touch events (Android / mobile) ───────────────────────────────────────
+    panelEl.addEventListener('touchstart', (e) => {
+        const t = e.touches[0];
+        startDrag(t.clientX, t.clientY, e.target);
+        // Don't call preventDefault() here — would block tap on buttons
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        const t = e.touches[0];
+        moveDrag(t.clientX, t.clientY);
+        e.preventDefault(); // prevent page scroll while dragging the panel
+    }, { passive: false });
+
+    document.addEventListener('touchend', endDrag);
 }
 
 // ── UI state helpers ───────────────────────────────────────────────────────────

@@ -38,6 +38,14 @@ export async function captureVideo() {
         return;
     }
 
+    // captureStream() is not available on Firefox for Android.
+    // Show a helpful message rather than crashing with a JS error.
+    if (typeof state.currentVideo.captureStream !== 'function') {
+        refs.statusEl.textContent = '❌ Record not supported on Android';
+        refs.statusEl.style.color = '#ff6b6b';
+        return;
+    }
+
     // ── Stop path ─────────────────────────────────────────────────────────────
     if (state.isRecording) {
         // User clicked "Stop Recording" early — stop immediately

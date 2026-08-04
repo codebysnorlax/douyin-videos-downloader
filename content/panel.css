@@ -27,7 +27,8 @@
     position: fixed;
     top: 20px;
     right: 20px;
-    width: 300px;
+    /* Never wider than the viewport minus 24px gutter on each side */
+    width: min(300px, calc(100vw - 24px));
     min-height: 110px;
     background-color: #090A0A;
     color: #ffffff;
@@ -43,6 +44,8 @@
     padding: 10px 12px;
     cursor: grab;
     user-select: none;
+    /* Tell the browser this element handles its own touch panning */
+    touch-action: none;
 }
 
 /* Applied while the user is actively dragging the panel */
@@ -171,7 +174,7 @@
 
 .dl-btn {
     flex: 1;
-    height: 26px;
+    height: 32px; /* 32px minimum for comfortable finger tap on Android */
     border: none;
     border-radius: 5px;
     cursor: pointer;
@@ -184,6 +187,7 @@
     gap: 5px;
     outline: none;
     transition: all 0.2s;
+    touch-action: manipulation; /* disable double-tap zoom on button taps */
 }
 
 .dl-btn:active {
@@ -289,4 +293,33 @@
     background: #090A0A;
     border-radius: 12px; /* slightly less than the panel's 14px for a clean edge */
     z-index: -1;
+}
+
+/* ── Android / narrow-screen adjustments ─────────────────────────────────── */
+/* On screens narrower than 400px (most Android phones in portrait) the panel
+   gets a slightly smaller font and tighter padding so it stays fully on screen */
+@media (max-width: 400px) {
+    #dl-panel {
+        top: 12px;
+        right: 12px;
+        gap: 6px;
+        padding: 8px 10px;
+    }
+
+    .dl-title {
+        font-size: 13px;
+    }
+
+    .dl-status {
+        font-size: 10px;
+    }
+
+    .dl-url-display {
+        font-size: 8.5px;
+    }
+
+    .dl-btn {
+        font-size: 10px;
+        height: 34px; /* extra height for finger taps on narrow screens */
+    }
 }
