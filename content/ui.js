@@ -34,10 +34,28 @@ export const refs = {
     panel: null,
     /** <div id="douyin-dl-ui"> — outermost wrapper injected into document.body */
     ui: null,
+    /** <div id="dl-title"> — the panel title element for the URL-detected flash */
+    titleEl: null,
 };
 
 let lastAutoCopiedUrl = null;
 let isCopyingFeedback = false;
+let lastFlashedUrl    = null;
+
+// Trigger the gradient sweep once on the title, then restore white text.
+// Removes and re-adds the class so it replays for back-to-back new URLs.
+function _flashTitle() {
+    if (!refs.titleEl) return;
+    refs.titleEl.classList.remove('dl-title-flash');
+    // Force a reflow so the browser registers the removal before re-adding
+    void refs.titleEl.offsetWidth;
+    refs.titleEl.classList.add('dl-title-flash');
+    // Remove the class once the animation finishes so the title returns to
+    // plain white — { once: true } auto-cleans the listener, no memory leak
+    refs.titleEl.addEventListener('animationend', () => {
+        refs.titleEl.classList.remove('dl-title-flash');
+    }, { once: true });
+}
 
 // ── Panel creation ─────────────────────────────────────────────────────────────
 
@@ -62,7 +80,7 @@ export function createPanel() {
             <button id="dl-btn-close" class="dl-btn-close">×</button>
 
             <div class="dl-header">
-                <div class="dl-title">Douyin Downloader</div>
+                <div class="dl-title" id="dl-title">Douyin Downloader</div>
 
                 <div class="dl-status-row">
                     <div id="dl-status" class="dl-status scanning">Scanning for videos...</div>
@@ -86,6 +104,7 @@ export function createPanel() {
     // Populate the refs object so other modules can access DOM elements
     refs.ui          = ui;
     refs.panel       = document.getElementById('dl-panel');
+    refs.titleEl     = document.getElementById('dl-title');
     refs.statusEl    = document.getElementById('dl-status');
     refs.urlDisplay  = document.getElementById('dl-url-display');
     refs.downloadBtn = document.getElementById('dl-btn-download');
@@ -289,6 +308,12 @@ export function updateUI() {
                     navigator.clipboard.writeText(state.currentUrl).catch(() => {});
                 }
             });
+        }
+
+        // Flash the DD letters once whenever a genuinely new URL is detected
+        if (state.currentUrl !== lastFlashedUrl) {
+            lastFlashedUrl = state.currentUrl;
+            _flashTitle();
         }
 
     } else if (isBlob) {

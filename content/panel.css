@@ -94,6 +94,35 @@
     letter-spacing: -0.2px;
 }
 
+/* ── Title URL-detected flash ────────────────────────────────────────────── */
+/*
+ * When a new URL is detected, JS adds .dl-title-flash to #dl-title.
+ * A gradient sweeps left-to-right across the full text once (0.55s).
+ * Uses background-clip: text so only the text pixels are coloured —
+ * GPU composited, zero layout/paint cost.
+ * After the animation the title returns to plain white automatically.
+ */
+@keyframes dl-title-sweep {
+    0%   { background-position: 120% center; }
+    100% { background-position: -20% center; }
+}
+
+.dl-title-flash {
+    background: linear-gradient(
+        90deg,
+        #ffffff   0%,
+        #ff3b5c  20%,
+        #a855f7  50%,
+        #3b9eff  80%,
+        #ffffff 100%
+    );
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: dl-title-sweep 0.55s ease-out forwards;
+}
+
 /*
  * Row that places the status text and the aweme-id side by side.
  * align-items: baseline keeps the differently-sized text on the same
@@ -174,7 +203,7 @@
 
 .dl-btn {
     flex: 1;
-    height: 32px; /* 32px minimum for comfortable finger tap on Android */
+    height: 26px;
     border: none;
     border-radius: 5px;
     cursor: pointer;
@@ -320,6 +349,5 @@
 
     .dl-btn {
         font-size: 10px;
-        height: 34px; /* extra height for finger taps on narrow screens */
     }
 }

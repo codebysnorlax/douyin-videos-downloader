@@ -199,23 +199,36 @@ async function fetchAwemeDetail(awemeId) {
  * of mutations per navigation so we wait for the DOM to settle.
  */
 export function setupListeners() {
-    // Scroll: debounce by 100 ms — frequent during feed scrolling
+    // Scroll: debounce by 50 ms — frequent during feed scrolling but needs to
+    // feel snappy so the URL updates quickly after a swipe
     window.addEventListener('scroll', () => {
         if (scrollTimer) clearTimeout(scrollTimer);
-        scrollTimer = setTimeout(trackVideo, 100);
+        scrollTimer = setTimeout(trackVideo, 50);
     }, { passive: true });
 
-    // Play: use capture phase so we see the event before Douyin's own handlers
+    // Play: use capture phase so we see the event before Douyin's own handlers.
+    // This is the fastest signal — fires the instant the new video starts playing
+    // so the URL updates immediately on swipe without waiting for any debounce.
     document.addEventListener('play', (e) => {
         if (e.target.tagName === 'VIDEO') trackVideo();
     }, true);
 
-    // MutationObserver: detects SPA route changes and new video elements
-    const observer = new MutationObserver(() => {
-        // 500 ms debounce: wait for Douyin's React reconciliation to finish
-        // rendering the new video element before we try to inspect it
+    // MutationObserver: detects SPA route changes and new video elements.
+    // IMPORTANT: We filter out mutations that originate inside our own panel
+    // (#douyin-dl-ui) — otherwise every updateUI() DOM write would re-trigger
+    // the observer and cause an unnecessary re-scan loop.
+    const ownPanel = document.getElementById('douyin-dl-ui');
+    const observer = new MutationObserver((mutations) => {
+        // Ignore mutations that only touch our own panel's subtree
+        const isOwnMutation = mutations.every(m =>
+            ownPanel && ownPanel.contains(m.target)
+        );
+        if (isOwnMutation) return;
+
+        // 300 ms debounce: enough for React reconciliation to finish, but
+        // shorter than before so route-change URL updates feel faster
         if (mutationTimer) clearTimeout(mutationTimer);
-        mutationTimer = setTimeout(trackVideo, 500);
+        mutationTimer = setTimeout(trackVideo, 300);
     });
     observer.observe(document.body, { childList: true, subtree: true });
 }
