@@ -49,7 +49,7 @@ export async function captureVideo() {
 
     // ── Start path ────────────────────────────────────────────────────────────
     state.isRecording = true;
-    refs.statusEl.textContent   = '🔴 Recording... (wait for video to finish)';
+    refs.statusEl.textContent   = '🔴 Recording...';
     refs.statusEl.style.color   = '#ff6b6b';
     refs.captureBtn.textContent      = 'Stop Recording';
     refs.captureBtn.style.backgroundColor = '#8c2d2d';

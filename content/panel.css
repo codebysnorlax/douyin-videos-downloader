@@ -99,18 +99,25 @@
 .dl-status-row {
     display: flex;
     justify-content: space-between;
+    align-items: baseline;
     width: 100%;
     padding: 0 8px;
     box-sizing: border-box;
-    align-items: baseline;
     margin-top: 4px;
+    gap: 6px;
+    overflow: hidden;
 }
 
 .dl-status {
     font-size: 11px;
     color: #675FA5;
     font-weight: 500;
-    min-height: 14px; /* prevents layout shift when text changes */
+    min-height: 14px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 1;
+    min-width: 0;
 }
 
 .dl-aweme-id {
@@ -119,6 +126,8 @@
     font-family: monospace;
     min-height: 11px;
     letter-spacing: 0.3px;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
 /* ── URL display ─────────────────────────────────────────────────────────── */

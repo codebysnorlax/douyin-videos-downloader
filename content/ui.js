@@ -238,7 +238,7 @@ export function updateUI() {
     resetDownloadBtn();
 
     if (!state.currentVideo) {
-        refs.statusEl.textContent   = 'Scanning for videos...';
+        refs.statusEl.textContent   = 'Scanning...';
         refs.statusEl.style.color   = '#675FA5';
         refs.urlDisplay.textContent = 'No video detected';
         refs.downloadBtn.style.opacity = '0.5';
@@ -278,7 +278,7 @@ export function updateUI() {
         // ── Video is an MSE blob stream — no direct URL extractable ────────
         // The MediaRecorder path is the only viable download strategy here
         refs.statusEl.classList.remove('scanning');
-        refs.statusEl.textContent   = 'Stream video(blob) -use Record';
+        refs.statusEl.textContent   = 'Stream — use Record';
         refs.statusEl.style.color   = '#675FA5';
         if (!isCopyingFeedback) refs.urlDisplay.textContent = state.currentVideo.src || '';
         refs.downloadBtn.style.opacity = '0.5';
@@ -290,7 +290,7 @@ export function updateUI() {
 
     } else {
         // ── URL not yet resolved — waiting for network interception ─────────
-        refs.statusEl.textContent   = 'Scanning for video source...';
+        refs.statusEl.textContent   = 'Scanning...';
         refs.statusEl.style.color   = '#675FA5';
         refs.urlDisplay.textContent = 'Checking network requests...';
         refs.downloadBtn.style.opacity = '0.5';
