@@ -35,29 +35,39 @@ export async function downloadVideo() {
         return;
     }
 
+    state.isDownloading = true;
+    updateUI();
+
     // Disable button and show spinner while download is in progress
-    refs.downloadBtn.disabled         = true;
-    refs.downloadBtn.style.opacity    = '0.8';
-    refs.downloadBtn.style.cursor     = 'not-allowed';
+    refs.downloadBtn.disabled      = true;
+    refs.downloadBtn.style.opacity = '0.8';
+    refs.downloadBtn.style.cursor  = 'not-allowed';
     const btnText = document.getElementById('dl-btn-text');
-    btnText.textContent = 'Downloading...';
+    if (btnText) btnText.textContent = 'Downloading...';
 
     // Inject a CSS-animated spinner before the button text
-    const spinner = document.createElement('span');
-    spinner.className = 'dl-spinner';
-    spinner.id        = 'dl-active-spinner';
-    refs.downloadBtn.insertBefore(spinner, btnText);
+    if (refs.downloadBtn && btnText && !document.getElementById('dl-active-spinner')) {
+        const spinner = document.createElement('span');
+        spinner.className = 'dl-spinner';
+        spinner.id        = 'dl-active-spinner';
+        refs.downloadBtn.insertBefore(spinner, btnText);
+    }
 
-    refs.statusEl.textContent = '⬇ Downloading...';
-    // Animated border effect while download is in progress (defined in panel.css)
-    refs.panel.classList.add('dl-panel-animating');
+    refs.statusEl.textContent = 'Downloading...';
+    // Animated border effect while download is in progress (defined in panel.css for expanded mode)
+    if (state.uiMode !== 'compact') {
+        refs.panel.classList.add('dl-panel-animating');
+    }
 
-    const filename     = `${getFormattedTimestamp()}.mp4`;
+    const filename      = `${getFormattedTimestamp()}.mp4`;
     const urlToDownload = state.currentUrl;
 
+    const cleanup = () => {
+        state.isDownloading = false;
+        updateUI();
+    };
+
     // ── Method 1: GM_download (Tampermonkey) ─────────────────────────────────
-    // Tampermonkey's GM_download can fetch cross-origin URLs with a custom
-    // Referer header, completely bypassing CORS.  Best option when available.
     if (typeof GM_download === 'function') {
         try {
             GM_download({
@@ -65,21 +75,21 @@ export async function downloadVideo() {
                 name: filename,
                 headers: { Referer: 'https://www.douyin.com/' },
                 onload: () => {
-                    refs.panel.classList.remove('dl-panel-animating');
-                    refs.statusEl.textContent = '✓ Download complete!';
+                    cleanup();
+                    refs.statusEl.textContent = 'Download complete!';
                     setTimeout(updateUI, 2000);
                 },
                 onerror: () => fetchDownload(urlToDownload, filename)
-                    .then(() => refs.panel.classList.remove('dl-panel-animating')),
+                    .then(() => {
+                        cleanup();
+                        setTimeout(updateUI, 2000);
+                    }),
             });
             return;
         } catch (e) { /* GM_download not available as expected — fall through */ }
     }
 
     // ── Method 2: GM_xmlhttpRequest (Tampermonkey) ───────────────────────────
-    // Fetches the video as a blob cross-origin, then triggers a browser save.
-    // Blob size check (> 10 000 bytes) guards against receiving an HTML error
-    // page instead of the actual video file.
     if (typeof GM_xmlhttpRequest === 'function') {
         try {
             GM_xmlhttpRequest({
@@ -90,25 +100,32 @@ export async function downloadVideo() {
                 onload: async (resp) => {
                     if (resp.response && resp.response.size > 10000) {
                         triggerBlobDownload(resp.response, filename);
-                        refs.panel.classList.remove('dl-panel-animating');
+                        cleanup();
                         refs.statusEl.textContent = '✓ Download complete!';
                         setTimeout(updateUI, 2000);
                     } else {
-                        // Response was too small — probably an error page
                         await fetchDownload(urlToDownload, filename);
-                        refs.panel.classList.remove('dl-panel-animating');
+                        cleanup();
+                        setTimeout(updateUI, 2000);
                     }
                 },
                 onerror: () => fetchDownload(urlToDownload, filename)
-                    .then(() => refs.panel.classList.remove('dl-panel-animating')),
+                    .then(() => {
+                        cleanup();
+                        setTimeout(updateUI, 2000);
+                    }),
             });
             return;
         } catch (e) { /* GM_xmlhttpRequest not available — fall through */ }
     }
 
     // ── Method 3: Standard fetch chain ───────────────────────────────────────
-    await fetchDownload(urlToDownload, filename);
-    refs.panel.classList.remove('dl-panel-animating');
+    try {
+        await fetchDownload(urlToDownload, filename);
+    } finally {
+        cleanup();
+        setTimeout(updateUI, 2000);
+    }
 }
 
 // ── Fetch download (multi-URL retry chain) ────────────────────────────────────
@@ -139,7 +156,7 @@ async function fetchDownload(url, filename) {
             const tryUrl      = urls[i];
             const isSameOrigin = tryUrl.includes('www.douyin.com');
             try {
-                refs.statusEl.textContent = `⬇ Trying ${isSameOrigin ? 'Douyin' : 'CDN'} ${i + 1}/${urls.length}...`;
+                refs.statusEl.textContent = `Trying ${isSameOrigin ? 'Douyin' : 'CDN'} ${i + 1}/${urls.length}...`;
                 const fetchOpts = isSameOrigin
                     ? { credentials: 'include' }
                     : { mode: 'cors', credentials: 'omit' };
@@ -299,16 +316,16 @@ export function openDownloadTab(url, filename) {
     try{
         const r=await fetch(${JSON.stringify(url)},{credentials:'omit'});
         const b=await r.blob();
-        if(b.size<1000){st.textContent='❌ Empty response. Right-click the link below and Save As:';
+        if(b.size<1000){st.textContent='Empty response. Right-click the link below and Save As:';
             const a2=document.createElement('a');a2.href=${JSON.stringify(url)};a2.textContent='Direct video link';
             a2.style.cssText='color:#6af;display:block;margin-top:20px';document.body.querySelector('div').appendChild(a2);return;}
         const u=URL.createObjectURL(b);
         const a=document.createElement('a');a.href=u;a.download=${JSON.stringify(filename)};
         document.body.appendChild(a);a.click();
-        st.textContent='✓ Download started! You can close this tab.';
+        st.textContent='Download started! You can close this tab.';
         setTimeout(()=>URL.revokeObjectURL(u),5000);
     }catch(e){
-        st.textContent='❌ Fetch failed. Right-click the link below and Save As:';
+        st.textContent='Fetch failed. Right-click the link below and Save As:';
         const a=document.createElement('a');a.href=${JSON.stringify(url)};a.textContent='Direct video link';
         a.style.cssText='color:#6af;display:block;margin-top:20px';document.body.querySelector('div').appendChild(a);
     }

@@ -33,4 +33,14 @@ export const state = {
      * the "Stop Recording" button or the auto-stop timer.
      */
     activeMediaRecorder: null,
+
+    /**
+     * True while a video download is in progress.
+     */
+    isDownloading: false,
+
+    /**
+     * Current panel layout mode: 'expanded' (full panel) or 'compact' (floating circle).
+     */
+    uiMode: 'expanded',
 };

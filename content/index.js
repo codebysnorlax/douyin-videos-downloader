@@ -18,35 +18,51 @@
  * ensures the fetch/XHR patches are applied before any user interaction.
  */
 
-import { state }                        from './state.js';
-import { refs, createPanel, updateUI }  from './ui.js';
-import { trackVideo, setupListeners }   from './tracker.js';
-import { downloadVideo }                from './downloader.js';
-import { captureVideo }                 from './recorder.js';
-import { videoUrlMap, capturedUrls }    from './network.js';
+import { state }                                    from './state.js';
+import { refs, createPanel, updateUI, setUiMode, toggleUiMode } from './ui.js';
+import { trackVideo, setupListeners }               from './tracker.js';
+import { downloadVideo }                            from './downloader.js';
+import { captureVideo }                             from './recorder.js';
+import { videoUrlMap, capturedUrls }                from './network.js';
+
+console.log('[Douyin Downloader] content/index.js entry point running...');
 
 // ── De-duplication guard ──────────────────────────────────────────────────────
-// MV3 content scripts can be re-injected without a full page reload (e.g. when
-// the extension is updated).  Removing an existing panel first prevents two
-// panels appearing simultaneously and avoids duplicate event listeners.
 const existing = document.getElementById('douyin-dl-ui');
-if (existing) existing.remove();
+if (existing) {
+    console.log('[Douyin Downloader] Removing existing UI wrapper element');
+    existing.remove();
+}
 
 // ── Panel creation ────────────────────────────────────────────────────────────
+console.log('[Douyin Downloader] Calling createPanel()...');
 createPanel();
+console.log('[Douyin Downloader] createPanel() completed. refs.panel:', refs.panel);
 
-// Respect user's saved panel visibility preference
-chrome.storage.local.get(['showPanel'], (result) => {
+// Respect user's saved panel visibility preference & UI mode
+chrome.storage.local.get(['showPanel', 'uiMode'], (result) => {
+    console.log('[Douyin Downloader] Storage loaded:', result);
     if (result.showPanel === false && refs.panel) {
+        console.log('[Douyin Downloader] showPanel is false, hiding panel');
         refs.panel.style.display = 'none';
+    } else if (refs.panel) {
+        console.log('[Douyin Downloader] Ensuring refs.panel.style.display is visible');
+        refs.panel.style.display = '';
+    }
+    if (result.uiMode) {
+        console.log('[Douyin Downloader] Applying saved uiMode:', result.uiMode);
+        setUiMode(result.uiMode);
     }
 });
 
 // ── Button handlers ───────────────────────────────────────────────────────────
-// Wired here (not in ui.js) so that ui.js has no dependency on downloader.js
-// or recorder.js, keeping the dependency graph acyclic
-refs.downloadBtn.onclick = downloadVideo;
-refs.captureBtn.onclick  = captureVideo;
+if (refs.downloadBtn) refs.downloadBtn.onclick = downloadVideo;
+if (refs.compactBtn)  refs.compactBtn.onclick  = downloadVideo;
+if (refs.compactBtn)  refs.compactBtn.ondblclick = (e) => {
+    e.stopPropagation();
+    toggleUiMode();
+};
+if (refs.captureBtn)  refs.captureBtn.onclick  = captureVideo;
 
 // ── Listeners ─────────────────────────────────────────────────────────────────
 setupListeners();
@@ -67,8 +83,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (message.enabled) {
             if (!panel) {
                 createPanel();
-                refs.downloadBtn.onclick = downloadVideo;
-                refs.captureBtn.onclick  = captureVideo;
+                if (refs.downloadBtn) refs.downloadBtn.onclick = downloadVideo;
+                if (refs.compactBtn)  refs.compactBtn.onclick  = downloadVideo;
+                if (refs.compactBtn)  refs.compactBtn.ondblclick = (e) => {
+                    e.stopPropagation();
+                    toggleUiMode();
+                };
+                if (refs.captureBtn)  refs.captureBtn.onclick  = captureVideo;
             } else {
                 panel.style.display = '';
             }

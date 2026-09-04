@@ -34,6 +34,7 @@
     color: #ffffff;
     box-sizing: border-box;
     border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     z-index: 999999;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
@@ -41,11 +42,57 @@
     flex-direction: column;
     justify-content: flex-start;
     gap: 8px;
-    padding: 10px 12px;
+    padding: 6px 12px 10px 12px;
     cursor: grab;
     user-select: none;
     /* Tell the browser this element handles its own touch panning */
     touch-action: none;
+    transition: width 0.35s cubic-bezier(0.34, 1.35, 0.64, 1),
+                min-height 0.35s cubic-bezier(0.34, 1.35, 0.64, 1),
+                border-radius 0.35s cubic-bezier(0.34, 1.35, 0.64, 1),
+                padding 0.35s cubic-bezier(0.34, 1.35, 0.64, 1),
+                background-color 0.3s ease,
+                box-shadow 0.35s ease;
+}
+
+/* Pulsing aura glow highlight during mode morph */
+@keyframes dl-morph-glow {
+    0%   { box-shadow: 0 0 0 0 rgba(123, 115, 185, 0); }
+    40%  { box-shadow: 0 0 24px 3px rgba(123, 115, 185, 0.6), 0 0 10px 1px rgba(0, 242, 254, 0.3); }
+    100% { box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); }
+}
+
+#dl-panel.dl-morphing {
+    animation: dl-morph-glow 0.38s ease-out forwards;
+}
+
+/* Fade + Scale-In keyframe when switching to Expanded Mode */
+@keyframes dl-expand-content-in {
+    0% {
+        opacity: 0;
+        transform: scale(0.85) translateY(-5px);
+        filter: blur(2px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+        filter: blur(0);
+    }
+}
+
+/* Pop + Bounce keyframe when switching to Compact Mode */
+@keyframes dl-compact-pop-in {
+    0% {
+        opacity: 0;
+        transform: scale(0.4) rotate(-12deg);
+    }
+    70% {
+        transform: scale(1.12) rotate(3deg);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+    }
 }
 
 /* Applied while the user is actively dragging the panel */
@@ -58,22 +105,207 @@
     display: none;
 }
 
-/* ── Close button ────────────────────────────────────────────────────────── */
+/* ── Expanded Header Action Buttons ──────────────────────────────────────── */
+.dl-btn-toggle {
+    position: absolute;
+    top: 7px;
+    left: 12px;
+    background: none;
+    border: none;
+    color: #747272;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    z-index: 10;
+}
+
+.dl-btn-toggle:hover {
+    opacity: 1;
+    color: #ffffff;
+}
+
 .dl-btn-close {
     position: absolute;
-    top: 8px;
+    top: 7px;
     right: 12px;
     background: none;
     border: none;
     color: #747272;
     cursor: pointer;
-    font-size: 14px;
-    opacity: 0.6;
     padding: 0;
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.7;
+    z-index: 10;
 }
+
 .dl-btn-close:hover {
     opacity: 1;
+    color: #ffffff;
+}
+
+/* ── Expanded Content Layout ────────────────────────────────────────────── */
+.dl-expanded-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    animation: dl-expand-content-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ── Compact Mode Container (Transparent — No BG box) ──────────────────── */
+#dl-panel.dl-compact {
+    width: 46px;
+    min-height: unset;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0;
+    align-items: center;
+    gap: 2px;
+    overflow: visible;
+}
+
+/* Suppress expanded mode border animation pseudo-elements in compact mode */
+#dl-panel.dl-compact.dl-panel-animating::before,
+#dl-panel.dl-compact.dl-panel-animating::after {
+    display: none !important;
+    content: none !important;
+}
+
+#dl-panel.dl-compact .dl-btn-toggle,
+#dl-panel.dl-compact .dl-btn-close {
+    display: none;
+}
+
+#dl-panel.dl-compact .dl-expanded-content {
+    display: none;
+}
+
+.dl-compact-content {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+#dl-panel.dl-compact .dl-compact-content {
+    display: flex;
+    animation: dl-compact-pop-in 0.36s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.dl-compact-top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 42px;
+    padding: 0 1px;
+    margin-bottom: 2px;
+}
+
+.dl-btn-toggle-compact,
+.dl-btn-close-compact {
+    background: none;
+    border: none;
+    color: #7B73B9;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.95;
+    transition: opacity 0.2s ease, color 0.2s ease;
+}
+
+.dl-btn-toggle-compact svg,
+.dl-btn-close-compact svg {
+    width: 11px;
+    height: 11px;
+}
+
+.dl-btn-toggle-compact:hover,
+.dl-btn-close-compact:hover {
+    opacity: 1;
+    color: #ffffff;
+    transform: none !important;
+}
+
+.dl-btn-toggle-compact:active,
+.dl-btn-close-compact:active {
+    transform: none !important;
+}
+
+/* ── Circular Compact Download Button (Idle: Clean Dark Border, No Neon) ──── */
+.dl-compact-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background-color: #090A0A;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    outline: none;
+    position: relative;
+    user-select: none;
+    touch-action: manipulation;
+    transition: opacity 0.2s ease;
+}
+
+/* NO HOVER & NO CLICK SCALE ANIMATION */
+.dl-compact-btn:hover,
+.dl-compact-btn:active,
+.dl-compact-btn:focus {
+    transform: none !important;
+}
+
+.dl-compact-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    filter: grayscale(0.5);
+    transform: none !important;
+}
+
+/* Download icon inside circle (17px) */
+.dl-compact-icon {
+    width: 17px;
+    height: 17px;
+}
+
+/* Downloading spinner ring around compact circle (Active/Downloading only) */
+.dl-compact-spinner {
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1.5px solid transparent;
+    border-top-color: #ff0050;
+    border-right-color: #00f2fe;
+    border-bottom-color: #a855f7;
+    display: none;
+    animation: dl-compact-spin 0.8s linear infinite;
+}
+
+@keyframes dl-compact-spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.dl-compact-btn.downloading {
+    border-color: transparent !important;
+}
+
+.dl-compact-btn.downloading .dl-compact-spinner {
+    display: block;
 }
 
 /* ── Header section ──────────────────────────────────────────────────────── */

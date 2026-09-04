@@ -1,40 +1,52 @@
 /**
- * content/ui.js — Panel DOM creation, drag, URL-copy, and UI state updates.
+ * content/ui.js — Panel DOM creation, drag, URL-copy, mode toggling, and UI state updates.
  *
  * Responsibilities:
  *   - Build the floating download panel HTML (class-based, no inline styles).
- *   - Wire the close button and URL-copy click handler.
- *   - Implement the drag-to-reposition behaviour.
- *   - Export updateUI() and resetDownloadBtn() so tracker, downloader, and
- *     recorder can update the panel state without touching the DOM directly.
+ *   - Wire the close button, minimize/expand toggle button, and URL-copy click handler.
+ *   - Implement drag-to-reposition behaviour for both Expanded and Compact modes.
+ *   - Export updateUI(), resetDownloadBtn(), setUiMode(), and toggleUiMode().
  *
  * All visual styles live exclusively in content/panel.css.
  */
 
 import { state } from './state.js';
 
+// ── SVG Icon Constants ─────────────────────────────────────────────────────────
+
+export const SVG_MINIMIZE = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4v4H4M16 4v4h4M8 20v-4H4M16 20v-4h4"></path></svg>`;
+
+export const SVG_EXPAND = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V4h4M16 4h4v4M4 16v4h4M20 16v4h-4"></path></svg>`;
+
+export const SVG_CLOSE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+
+export const SVG_DOWNLOAD = `<svg class="dl-compact-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7B73B9" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`;
+
 // ── DOM element references ─────────────────────────────────────────────────────
-// Populated by createPanel() below.  Other modules import this object and read
-// from it after the panel has been created.
+// Populated by createPanel() below. Other modules import this object.
 
 export const refs = {
-    /** <div id="dl-status"> — small status line below the title */
+    /** <div id="dl-status"> — status text */
     statusEl: null,
-    /** <div id="dl-url-display"> — shows the detected/copied URL */
+    /** <div id="dl-url-display"> — detected/copied URL */
     urlDisplay: null,
-    /** <button id="dl-btn-download"> */
+    /** <button id="dl-btn-download"> — main download button in expanded mode */
     downloadBtn: null,
+    /** <button id="dl-compact-btn"> — circular download button in compact mode */
+    compactBtn: null,
     /** <button id="dl-btn-capture"> */
     captureBtn: null,
     /** <button id="dl-btn-close"> */
     closeBtn: null,
+    /** <button id="dl-btn-toggle"> — top-left minimize/expand toggle button */
+    toggleBtn: null,
     /** <div id="dl-aweme-id"> — monospace video-ID label */
     awemeIdEl: null,
     /** <div id="dl-panel"> — the draggable panel container */
     panel: null,
-    /** <div id="douyin-dl-ui"> — outermost wrapper injected into document.body */
+    /** <div id="douyin-dl-ui"> — outermost wrapper */
     ui: null,
-    /** <div id="dl-title"> — the panel title element for the URL-detected flash */
+    /** <div id="dl-title"> — panel title element */
     titleEl: null,
 };
 
@@ -42,84 +54,160 @@ let lastAutoCopiedUrl = null;
 let isCopyingFeedback = false;
 let lastFlashedUrl    = null;
 
-// Trigger the gradient sweep once on the title, then restore white text.
-// Removes and re-adds the class so it replays for back-to-back new URLs.
 function _flashTitle() {
     if (!refs.titleEl) return;
     refs.titleEl.classList.remove('dl-title-flash');
-    // Force a reflow so the browser registers the removal before re-adding
     void refs.titleEl.offsetWidth;
     refs.titleEl.classList.add('dl-title-flash');
-    // Remove the class once the animation finishes so the title returns to
-    // plain white — { once: true } auto-cleans the listener, no memory leak
     refs.titleEl.addEventListener('animationend', () => {
         refs.titleEl.classList.remove('dl-title-flash');
     }, { once: true });
 }
 
+// ── Mode Toggling & Positioning ────────────────────────────────────────────────
+
+export function toggleUiMode() {
+    const nextMode = state.uiMode === 'compact' ? 'expanded' : 'compact';
+    setUiMode(nextMode);
+}
+
+export function setUiMode(mode) {
+    console.log('[Douyin Downloader] setUiMode called with mode:', mode);
+    state.uiMode = mode;
+    if (!refs.panel) {
+        console.warn('[Douyin Downloader] setUiMode called but refs.panel is null!');
+        return;
+    }
+
+    // Trigger panel morphing aura pulse animation
+    refs.panel.classList.remove('dl-morphing');
+    void refs.panel.offsetWidth;
+    refs.panel.classList.add('dl-morphing');
+    setTimeout(() => {
+        if (refs.panel) refs.panel.classList.remove('dl-morphing');
+    }, 400);
+
+    const isCompact = mode === 'compact';
+    refs.panel.classList.toggle('dl-compact', isCompact);
+
+    if (refs.toggleBtn) {
+        refs.toggleBtn.innerHTML = isCompact ? SVG_EXPAND : SVG_MINIMIZE;
+        refs.toggleBtn.title     = isCompact ? "Expand Panel" : "Compact Panel";
+    }
+
+    const toggleCompactBtn = document.getElementById('dl-btn-toggle-compact');
+    if (toggleCompactBtn) {
+        toggleCompactBtn.innerHTML = SVG_EXPAND;
+        toggleCompactBtn.title     = "Expand Panel";
+    }
+
+    // Only recalculate absolute left/top if panel was explicitly dragged by user
+    if (refs.panel.classList.contains('has-been-dragged')) {
+        const rect = refs.panel.getBoundingClientRect();
+        requestAnimationFrame(() => {
+            if (!refs.panel) return;
+            const pWidth  = refs.panel.offsetWidth;
+            const pHeight = refs.panel.offsetHeight;
+            let left = parseFloat(refs.panel.style.left) || rect.left;
+            let top  = parseFloat(refs.panel.style.top)  || rect.top;
+
+            left = Math.max(8, Math.min(left, window.innerWidth  - pWidth  - 8));
+            top  = Math.max(8, Math.min(top,  window.innerHeight - pHeight - 8));
+
+            refs.panel.style.left  = left + 'px';
+            refs.panel.style.top   = top  + 'px';
+            refs.panel.style.right = 'auto';
+        });
+    }
+
+    // Keep all button states and animations synchronized
+    updateUI();
+
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ uiMode: mode });
+    }
+}
+
 // ── Panel creation ─────────────────────────────────────────────────────────────
 
-/**
- * Build the download panel, inject it into document.body, and wire up the
- * close button, URL-copy handler, and drag behaviour.
- *
- * Called once from index.js after the de-duplication guard.  No-op if the
- * panel is already present (guard in index.js prevents double-injection).
- *
- * All layout and appearance come from panel.css via class names —
- * there are no inline style= attributes here.
- */
 export function createPanel() {
+    console.log('[Douyin Downloader] createPanel() executing...');
     const ui = document.createElement('div');
     ui.id = 'douyin-dl-ui';
 
-    // panel.css handles all visual styling; this template only provides
-    // semantic structure and the class/id hooks those rules target
     ui.innerHTML = `
         <div id="dl-panel">
-            <button id="dl-btn-close" class="dl-btn-close">×</button>
+            <button id="dl-btn-toggle" class="dl-btn-icon dl-btn-toggle" title="Compact Panel">
+                ${SVG_MINIMIZE}
+            </button>
+            <button id="dl-btn-close" class="dl-btn-icon dl-btn-close" title="Close Panel">
+                ${SVG_CLOSE}
+            </button>
 
-            <div class="dl-header">
-                <div class="dl-title" id="dl-title">Douyin Downloader</div>
+            <div class="dl-expanded-content">
+                <div class="dl-header">
+                    <div class="dl-title" id="dl-title">Douyin Downloader</div>
 
-                <div class="dl-status-row">
-                    <div id="dl-status" class="dl-status scanning">Scanning for videos...</div>
-                    <div id="dl-aweme-id" class="dl-aweme-id"></div>
+                    <div class="dl-status-row">
+                        <div id="dl-status" class="dl-status scanning">Scanning for videos...</div>
+                        <div id="dl-aweme-id" class="dl-aweme-id"></div>
+                    </div>
+
+                    <div id="dl-url-display" class="dl-url-display dl-url-hoverable">No video detected</div>
                 </div>
 
-                <div id="dl-url-display" class="dl-url-display dl-url-hoverable">No video detected</div>
+                <div class="dl-btn-row">
+                    <button id="dl-btn-capture" class="dl-btn dl-btn-record">Record current video</button>
+                    <button id="dl-btn-download" class="dl-btn dl-btn-download">
+                        <span id="dl-btn-text">Download this video</span>
+                    </button>
+                </div>
             </div>
 
-            <div class="dl-btn-row">
-                <button id="dl-btn-capture" class="dl-btn dl-btn-record">Record current video</button>
-                <button id="dl-btn-download" class="dl-btn dl-btn-download">
-                    <span id="dl-btn-text">Download this video</span>
+            <div class="dl-compact-content">
+                <div class="dl-compact-top-bar">
+                    <button id="dl-btn-toggle-compact" class="dl-btn-icon dl-btn-toggle-compact" title="Expand Panel">
+                        ${SVG_EXPAND}
+                    </button>
+                    <button id="dl-btn-close-compact" class="dl-btn-icon dl-btn-close-compact" title="Close Panel">
+                        ${SVG_CLOSE}
+                    </button>
+                </div>
+                <button id="dl-compact-btn" class="dl-compact-btn" title="Download this video">
+                    ${SVG_DOWNLOAD}
+                    <div class="dl-compact-spinner" id="dl-compact-spinner"></div>
                 </button>
             </div>
         </div>
     `;
 
     document.body.appendChild(ui);
+    console.log('[Douyin Downloader] Injected #douyin-dl-ui into document.body');
 
-    // Populate the refs object so other modules can access DOM elements
     refs.ui          = ui;
     refs.panel       = document.getElementById('dl-panel');
     refs.titleEl     = document.getElementById('dl-title');
     refs.statusEl    = document.getElementById('dl-status');
     refs.urlDisplay  = document.getElementById('dl-url-display');
     refs.downloadBtn = document.getElementById('dl-btn-download');
+    refs.compactBtn  = document.getElementById('dl-compact-btn');
     refs.captureBtn  = document.getElementById('dl-btn-capture');
     refs.closeBtn    = document.getElementById('dl-btn-close');
+    refs.toggleBtn   = document.getElementById('dl-btn-toggle');
     refs.awemeIdEl   = document.getElementById('dl-aweme-id');
 
-    // Hide panel for this page session only — do NOT persist showPanel: false
-    // so the panel re-appears automatically the next time the user visits Douyin.
-    refs.closeBtn.onclick = () => {
+    const handleClose = () => {
         if (refs.panel) refs.panel.style.display = 'none';
     };
 
-    // Click the URL display to copy the resolved CDN URL to clipboard.
-    // Only copies when a real URL is shown (not the placeholder text).
+    refs.closeBtn.onclick = handleClose;
+    const closeCompactBtn = document.getElementById('dl-btn-close-compact');
+    if (closeCompactBtn) closeCompactBtn.onclick = handleClose;
+
+    refs.toggleBtn.onclick = toggleUiMode;
+    const toggleCompactBtn = document.getElementById('dl-btn-toggle-compact');
+    if (toggleCompactBtn) toggleCompactBtn.onclick = toggleUiMode;
+
     refs.urlDisplay.onclick = () => {
         const textToCopy = state.currentUrl || refs.urlDisplay.textContent;
         if (
@@ -128,7 +216,6 @@ export function createPanel() {
             !textToCopy.startsWith('No video') &&
             !textToCopy.startsWith('Copied')
         ) {
-            // Write to clipboard with fallback
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(textToCopy).catch(() => {
                     _copyFallback(textToCopy);
@@ -164,47 +251,53 @@ function _copyFallback(text) {
     } catch (e) {}
 }
 
-/**
- * Make the panel draggable within the viewport.
- *
- * Douyin's own scroll event listeners would interfere with a standard CSS
- * draggable so we implement it manually via mousedown / mousemove / mouseup.
- * Touch equivalents (touchstart / touchmove / touchend) are wired in parallel
- * so the panel can be dragged with a finger on Android.
- *
- * On mousedown/touchstart we switch from right-anchored (CSS `right: 20px`) to
- * left-anchored positioning so that the panel follows absolute pixel coords
- * during the drag without jumping.  We also clamp the final position to the
- * viewport bounds so the panel can never be dragged fully off-screen.
- *
- * @param {HTMLElement} panelEl
- */
+// ── Drag behavior with movement threshold ──────────────────────────────────────
+
 function _setupDrag(panelEl) {
     let isDragging  = false;
+    let isMouseDown = false;
+    let dragStartX  = 0;
+    let dragStartY  = 0;
     let dragOffsetX = 0;
     let dragOffsetY = 0;
 
     function startDrag(clientX, clientY, target) {
-        if (target.tagName === 'BUTTON' || target.id === 'dl-url-display') return;
-        isDragging = true;
+        if (target.closest('button') || target.id === 'dl-url-display') return;
+
+        isMouseDown = true;
+        dragStartX  = clientX;
+        dragStartY  = clientY;
+
         const rect  = panelEl.getBoundingClientRect();
         dragOffsetX = clientX - rect.left;
         dragOffsetY = clientY - rect.top;
-        panelEl.style.left  = rect.left + 'px';
-        panelEl.style.top   = rect.top  + 'px';
-        panelEl.style.right = 'auto';
-        panelEl.classList.add('dragging');
     }
 
     function moveDrag(clientX, clientY) {
-        if (!isDragging) return;
-        let newX = clientX - dragOffsetX;
-        let newY = clientY - dragOffsetY;
-        newX = Math.max(0, Math.min(newX, window.innerWidth  - panelEl.offsetWidth));
-        newY = Math.max(0, Math.min(newY, window.innerHeight - panelEl.offsetHeight));
-        panelEl.style.left  = newX + 'px';
-        panelEl.style.top   = newY + 'px';
-        panelEl.style.right = 'auto';
+        if (!isMouseDown) return;
+
+        const dx = clientX - dragStartX;
+        const dy = clientY - dragStartY;
+
+        if (!isDragging && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+            isDragging = true;
+            panelEl.classList.add('has-been-dragged');
+            const rect = panelEl.getBoundingClientRect();
+            panelEl.style.left  = rect.left + 'px';
+            panelEl.style.top   = rect.top  + 'px';
+            panelEl.style.right = 'auto';
+            panelEl.classList.add('dragging');
+        }
+
+        if (isDragging) {
+            let newX = clientX - dragOffsetX;
+            let newY = clientY - dragOffsetY;
+            newX = Math.max(0, Math.min(newX, window.innerWidth  - panelEl.offsetWidth));
+            newY = Math.max(0, Math.min(newY, window.innerHeight - panelEl.offsetHeight));
+            panelEl.style.left  = newX + 'px';
+            panelEl.style.top   = newY + 'px';
+            panelEl.style.right = 'auto';
+        }
     }
 
     function endDrag() {
@@ -212,28 +305,25 @@ function _setupDrag(panelEl) {
             isDragging = false;
             panelEl.classList.remove('dragging');
         }
+        isMouseDown = false;
     }
 
-    // ── Mouse events (desktop) ─────────────────────────────────────────────────
     panelEl.addEventListener('mousedown', (e) => {
         startDrag(e.clientX, e.clientY, e.target);
-        e.preventDefault();
     });
     document.addEventListener('mousemove', (e) => moveDrag(e.clientX, e.clientY));
     document.addEventListener('mouseup',   endDrag);
 
-    // ── Touch events (Android / mobile) ───────────────────────────────────────
     panelEl.addEventListener('touchstart', (e) => {
         const t = e.touches[0];
         startDrag(t.clientX, t.clientY, e.target);
-        // Don't call preventDefault() here — would block tap on buttons
     }, { passive: true });
 
     document.addEventListener('touchmove', (e) => {
-        if (!isDragging) return;
+        if (!isMouseDown) return;
         const t = e.touches[0];
         moveDrag(t.clientX, t.clientY);
-        e.preventDefault(); // prevent page scroll while dragging the panel
+        if (isDragging) e.preventDefault();
     }, { passive: false });
 
     document.addEventListener('touchend', endDrag);
@@ -241,45 +331,67 @@ function _setupDrag(panelEl) {
 
 // ── UI state helpers ───────────────────────────────────────────────────────────
 
-/**
- * Reset the download button to its idle state.
- * Removes the spinner element (if one was injected during a download) and
- * restores the button text to the default label.
- *
- * Called at the start of every updateUI() call so the button is never left
- * in a half-downloaded state when the user navigates to a new video.
- */
 export function resetDownloadBtn() {
     const spinner = document.getElementById('dl-active-spinner');
     if (spinner) spinner.remove();
     const btnText = document.getElementById('dl-btn-text');
     if (btnText) btnText.textContent = 'Download this video';
+
+    if (refs.compactBtn) {
+        refs.compactBtn.classList.remove('downloading');
+    }
 }
 
-/**
- * Synchronise panel appearance with the current shared state.
- *
- * Three possible states:
- *   1. No video detected at all → both buttons disabled, placeholder text.
- *   2. Direct CDN URL found     → Download enabled, Capture disabled.
- *   3. Video is a blob: stream  → Capture enabled, Download disabled.
- *   4. Searching (transitional) → both buttons disabled, "Checking…" text.
- *
- * Inline style overrides here take deliberate precedence over the CSS defaults
- * because they represent ephemeral per-state overrides that depend on runtime
- * values (e.g. the actual URL string).  The CSS classes provide the base
- * appearance; these overrides layer on top.
- */
 export function updateUI() {
+    if (state.isDownloading) {
+        refs.downloadBtn.disabled      = true;
+        refs.downloadBtn.style.opacity = '0.8';
+        refs.downloadBtn.style.cursor  = 'not-allowed';
+        const btnText = document.getElementById('dl-btn-text');
+        if (btnText) btnText.textContent = 'Downloading...';
+
+        if (refs.downloadBtn && btnText && !document.getElementById('dl-active-spinner')) {
+            const spinner = document.createElement('span');
+            spinner.className = 'dl-spinner';
+            spinner.id        = 'dl-active-spinner';
+            refs.downloadBtn.insertBefore(spinner, btnText);
+        }
+
+        if (refs.compactBtn) {
+            refs.compactBtn.disabled      = true;
+            refs.compactBtn.style.opacity = '0.9';
+            refs.compactBtn.style.cursor  = 'not-allowed';
+            refs.compactBtn.classList.add('downloading');
+        }
+
+        if (state.uiMode !== 'compact') {
+            refs.panel.classList.add('dl-panel-animating');
+        } else {
+            refs.panel.classList.remove('dl-panel-animating');
+        }
+
+        refs.statusEl.textContent = '⬇ Downloading...';
+        return;
+    }
+
     resetDownloadBtn();
+    refs.panel.classList.remove('dl-panel-animating');
 
     if (!state.currentVideo) {
         refs.statusEl.textContent   = 'Scanning...';
         refs.statusEl.style.color   = '#675FA5';
         refs.urlDisplay.textContent = 'No video detected';
+        
         refs.downloadBtn.style.opacity = '0.5';
         refs.downloadBtn.style.cursor  = 'not-allowed';
         refs.downloadBtn.disabled      = true;
+
+        if (refs.compactBtn) {
+            refs.compactBtn.style.opacity = '0.5';
+            refs.compactBtn.style.cursor  = 'not-allowed';
+            refs.compactBtn.disabled      = true;
+        }
+
         refs.captureBtn.style.opacity  = '0.5';
         refs.captureBtn.style.cursor   = 'not-allowed';
         refs.captureBtn.disabled       = true;
@@ -289,14 +401,22 @@ export function updateUI() {
     const isBlob = state.currentVideo.src?.startsWith('blob:');
 
     if (state.currentUrl && !state.currentUrl.startsWith('blob:')) {
-        // ── Direct CDN URL is available ────────────────────────────────────
         refs.statusEl.classList.remove('scanning');
         refs.statusEl.textContent   = 'URL found!';
         refs.statusEl.style.color   = '#675FA5';
         if (!isCopyingFeedback) refs.urlDisplay.textContent = state.currentUrl;
+
         refs.downloadBtn.style.opacity = '1';
         refs.downloadBtn.style.cursor  = 'pointer';
         refs.downloadBtn.disabled      = false;
+
+        if (refs.compactBtn) {
+            refs.compactBtn.style.opacity = '1';
+            refs.compactBtn.style.cursor  = 'pointer';
+            refs.compactBtn.disabled      = false;
+            refs.compactBtn.classList.remove('downloading');
+        }
+
         refs.captureBtn.style.opacity  = '0.5';
         refs.captureBtn.style.cursor   = 'not-allowed';
         refs.captureBtn.disabled       = true;
@@ -310,34 +430,46 @@ export function updateUI() {
             });
         }
 
-        // Flash the DD letters once whenever a genuinely new URL is detected
         if (state.currentUrl !== lastFlashedUrl) {
             lastFlashedUrl = state.currentUrl;
             _flashTitle();
         }
 
     } else if (isBlob) {
-        // ── Video is an MSE blob stream — no direct URL extractable ────────
-        // The MediaRecorder path is the only viable download strategy here
         refs.statusEl.classList.remove('scanning');
-        refs.statusEl.textContent   = 'Stream — use Record';
+        refs.statusEl.textContent   = 'Stream, Record it!';
         refs.statusEl.style.color   = '#675FA5';
         if (!isCopyingFeedback) refs.urlDisplay.textContent = state.currentVideo.src || '';
+
         refs.downloadBtn.style.opacity = '0.5';
         refs.downloadBtn.style.cursor  = 'not-allowed';
         refs.downloadBtn.disabled      = true;
+
+        if (refs.compactBtn) {
+            refs.compactBtn.style.opacity = '0.5';
+            refs.compactBtn.style.cursor  = 'not-allowed';
+            refs.compactBtn.disabled      = true;
+        }
+
         refs.captureBtn.style.opacity  = '1';
         refs.captureBtn.style.cursor   = 'pointer';
         refs.captureBtn.disabled       = false;
 
     } else {
-        // ── URL not yet resolved — waiting for network interception ─────────
         refs.statusEl.textContent   = 'Scanning...';
         refs.statusEl.style.color   = '#675FA5';
         refs.urlDisplay.textContent = 'Checking network requests...';
+
         refs.downloadBtn.style.opacity = '0.5';
         refs.downloadBtn.style.cursor  = 'not-allowed';
         refs.downloadBtn.disabled      = true;
+
+        if (refs.compactBtn) {
+            refs.compactBtn.style.opacity = '0.5';
+            refs.compactBtn.style.cursor  = 'not-allowed';
+            refs.compactBtn.disabled      = true;
+        }
+
         refs.captureBtn.style.opacity  = '0.5';
         refs.captureBtn.style.cursor   = 'not-allowed';
         refs.captureBtn.disabled       = true;
@@ -346,12 +478,6 @@ export function updateUI() {
 
 // ── Utility ───────────────────────────────────────────────────────────────────
 
-/**
- * Generate a download filename timestamp in the format DV-DD-MM-MI-SS.
- * Used by both the downloader and recorder to produce unique filenames.
- *
- * @returns {string}  e.g. "DV-22-07-34-08"
- */
 export function getFormattedTimestamp() {
     const now = new Date();
     const dd  = String(now.getDate()).padStart(2, '0');
@@ -360,3 +486,4 @@ export function getFormattedTimestamp() {
     const sec = String(now.getSeconds()).padStart(2, '0');
     return `DV-${dd}-${mm}-${min}-${sec}`;
 }
+
