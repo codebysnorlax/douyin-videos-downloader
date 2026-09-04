@@ -58,9 +58,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     btnDownload.disabled = false;
                     btnRecord.disabled = false;
                     if (response.isRecording) {
-                        btnRecord.innerHTML = '<span>Stop Record</span>';
+                        btnRecord.replaceChildren(Object.assign(document.createElement('span'), { textContent: 'Stop Record' }));
                     } else {
-                        btnRecord.innerHTML = '<span>Record</span>';
+                        btnRecord.replaceChildren(Object.assign(document.createElement('span'), { textContent: 'Record' }));
                     }
                 } else {
                     statusDot.className = 'dot warning';
