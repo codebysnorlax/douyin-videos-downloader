@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "build": "esbuild content/index.js --bundle --outfile=content/bundle.js --format=iife --platform=browser --target=firefox109",
+    "watch": "esbuild content/index.js --bundle --outfile=content/bundle.js --format=iife --platform=browser --target=firefox109 --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

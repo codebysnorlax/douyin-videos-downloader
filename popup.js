@@ -15,7 +15,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Load saved preferences & download stats ──────────────────────────────
     chrome.storage.local.get(['showPanel', 'autoCopy', 'downloadCount'], (result) => {
-        if (result.showPanel !== undefined) togglePanel.checked = result.showPanel;
+        // Default panel to ON if never explicitly set by the user
+        const panelOn = result.showPanel !== false;
+        togglePanel.checked = panelOn;
+        if (!panelOn) chrome.storage.local.set({ showPanel: true });
         if (result.autoCopy !== undefined) toggleAutocopy.checked = result.autoCopy;
         if (statDownloads) statDownloads.textContent = result.downloadCount || 0;
     });
@@ -58,9 +61,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     btnDownload.disabled = false;
                     btnRecord.disabled = false;
                     if (response.isRecording) {
-                        btnRecord.replaceChildren(Object.assign(document.createElement('span'), { textContent: 'Stop Record' }));
+                        btnRecord.innerHTML = '<span>Stop Record</span>';
                     } else {
-                        btnRecord.replaceChildren(Object.assign(document.createElement('span'), { textContent: 'Record' }));
+                        btnRecord.innerHTML = '<span>Record</span>';
                     }
                 } else {
                     statusDot.className = 'dot warning';
@@ -111,9 +114,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Helper: Send message to active Douyin tab ─────────────────────────────
     function sendToActiveDouyinTab(message) {
-        chrome.tabs.query({ active: true, currentWindow: true, url: "*://*.douyin.com/*" }, (tabs) => {
-            if (tabs[0]) {
-                chrome.tabs.sendMessage(tabs[0].id, message);
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tab = tabs[0];
+            if (tab && tab.url && tab.url.includes('douyin.com')) {
+                chrome.tabs.sendMessage(tab.id, message);
             }
         });
     }

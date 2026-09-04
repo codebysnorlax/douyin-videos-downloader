@@ -1,25 +1,25 @@
-(() => {
-    console.log('[Douyin Downloader] loader.js injected on page:', window.location.href);
-    const indexUrl = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL)
-        ? chrome.runtime.getURL('content/index.js')
-        : (typeof browser !== 'undefined' && browser.runtime && browser.runtime.getURL)
-            ? browser.runtime.getURL('content/index.js')
-            : null;
+/**
+ * content/loader.js — Extension content-script bootstrap.
+ *
+ * This file is the sole entry point listed in manifest.json's content_scripts.
+ * It dynamically imports content/index.js as an ES module.
+ *
+ * Why dynamic import instead of listing index.js directly?
+ *   • Firefox does not support the "type":"module" manifest key in content_scripts.
+ *   • Listing index.js directly without "type":"module" causes the browser to load
+ *     it as a classic script, where bare ES `import` statements are a syntax error.
+ *   • A dynamic import() issued from a content script runs in the extension's own
+ *     isolated world and is NOT subject to the page's Content-Security-Policy.
+ */
 
-    if (!indexUrl) {
-        console.error('[Douyin Downloader] Failed to resolve URL for content/index.js');
-        return;
-    }
+console.log('[Douyin Downloader] loader.js injected on:', window.location.href);
 
-    console.log('[Douyin Downloader] Extension index URL resolved:', indexUrl);
+const indexUrl = chrome.runtime.getURL('content/index.js');
 
-    try {
-        const script = document.createElement('script');
-        script.type = 'module';
-        script.src = indexUrl;
-        (document.head || document.documentElement).appendChild(script);
-        console.log('[Douyin Downloader] Injected script tag into page DOM successfully');
-    } catch (err) {
-        console.error('[Douyin Downloader] DOM script injection failed:', err);
-    }
-})();
+import(indexUrl)
+    .then(() => {
+        console.log('[Douyin Downloader] index.js loaded successfully via dynamic import.');
+    })
+    .catch((err) => {
+        console.error('[Douyin Downloader] Dynamic import of index.js failed:', err);
+    });
