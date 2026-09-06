@@ -17,15 +17,10 @@ This extension helps download Douyin videos from the browser. It adds a small pa
 ## Supported browser
 
 - Firefox with a compatible version
-- Chrome or Chromium-based browsers
 
 ## Installation
 
-1. Open your browser's extension page.
-2. Enable Developer Mode.
-3. Click Load unpacked.
-4. Select the folder containing this extension.
-5. The extension will appear in your extension list.
+https://addons.mozilla.org/en-US/firefox/addon/douyin-videos-downloader/
 
 ## How to use
 
