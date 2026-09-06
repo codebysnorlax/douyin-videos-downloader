@@ -31,7 +31,7 @@ import { getAwemeIdFromVideoElement } from './extractor.js';
  */
 export async function downloadVideo() {
     if (!state.currentUrl || state.currentUrl.startsWith('blob:')) {
-        refs.statusEl.textContent = '❌ No direct URL available';
+        refs.statusEl.textContent = 'No direct URL available';
         return;
     }
 
@@ -101,7 +101,7 @@ export async function downloadVideo() {
                     if (resp.response && resp.response.size > 10000) {
                         triggerBlobDownload(resp.response, filename);
                         cleanup();
-                        refs.statusEl.textContent = '✓ Download complete!';
+                        refs.statusEl.textContent = 'Download complete!';
                         setTimeout(updateUI, 2000);
                     } else {
                         await fetchDownload(urlToDownload, filename);
@@ -165,7 +165,7 @@ async function fetchDownload(url, filename) {
                     const blob = await response.blob();
                     if (isValidVideoBlob(blob)) {
                         triggerBlobDownload(blob, filename);
-                        refs.statusEl.textContent = '✓ Download complete!';
+                        refs.statusEl.textContent = 'Download complete!';
                         setTimeout(updateUI, 2000);
                         return true;
                     }
@@ -195,7 +195,7 @@ async function fetchDownload(url, filename) {
     // means the token expired.  Re-fetching the detail API gives us a fresh
     // www.douyin.com proxy URL that doesn't expire as quickly.
     if (awemeId) {
-        refs.statusEl.textContent = '⬇ Fetching fresh URLs...';
+        refs.statusEl.textContent = 'Fetching fresh URLs...';
 
         try {
             const apiUrl = `https://www.douyin.com/aweme/v1/web/aweme/detail/?aweme_id=${awemeId}&aid=6383&device_platform=web`;
@@ -225,12 +225,12 @@ async function fetchDownload(url, filename) {
     // ── Last resort ───────────────────────────────────────────────────────────
     if (awemeId) {
         // Open the Douyin video page — the user can right-click → Save Video
-        refs.statusEl.textContent = '⬇ Opening video page...';
+        refs.statusEl.textContent = 'Opening video page...';
         window.open(`https://www.douyin.com/video/${awemeId}`, '_blank');
         setTimeout(updateUI, 3000);
     } else {
         // No aweme_id — open an inline helper page that retries the fetch
-        refs.statusEl.textContent = '⬇ Opening download page...';
+        refs.statusEl.textContent = 'Opening download page...';
         openDownloadTab(url, filename);
         setTimeout(updateUI, 3000);
     }
@@ -307,7 +307,7 @@ export function openDownloadTab(url, filename) {
 <html><head><title>Downloading...</title></head>
 <body style="background:#111;color:#fff;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
 <div style="text-align:center">
-<h2>⬇ Downloading video...</h2>
+<h2>Downloading video...</h2>
 <p id="st">Fetching from CDN...</p>
 </div>
 <script>

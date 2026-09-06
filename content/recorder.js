@@ -34,14 +34,14 @@ import { recordDownloadCount } from './downloader.js';
  */
 export async function captureVideo() {
     if (!state.currentVideo) {
-        refs.statusEl.textContent = '❌ No video to record';
+        refs.statusEl.textContent = 'No video to record';
         return;
     }
 
     // captureStream() is not available on Firefox for Android.
     // Show a helpful message rather than crashing with a JS error.
     if (typeof state.currentVideo.captureStream !== 'function') {
-        refs.statusEl.textContent = '❌ Record not supported on Android';
+        refs.statusEl.textContent = 'Record not supported on Android';
         refs.statusEl.style.color = '#ff6b6b';
         return;
     }
@@ -57,7 +57,7 @@ export async function captureVideo() {
 
     // ── Start path ────────────────────────────────────────────────────────────
     state.isRecording = true;
-    refs.statusEl.textContent   = '🔴 Recording...';
+    refs.statusEl.textContent   = 'Recording...';
     refs.statusEl.style.color   = '#ff6b6b';
     refs.captureBtn.textContent      = 'Stop Recording';
     refs.captureBtn.style.backgroundColor = '#8c2d2d';
@@ -94,7 +94,7 @@ export async function captureVideo() {
             state.isRecording          = false;
             state.activeMediaRecorder  = null;
             refs.panel.classList.remove('dl-panel-animating');
-            refs.statusEl.textContent        = '✓ Recording saved!';
+            refs.statusEl.textContent        = 'Recording saved!';
             refs.statusEl.style.color        = '#675FA5';
             refs.captureBtn.textContent           = 'Record current video';
             refs.captureBtn.style.backgroundColor = '#313135';
@@ -124,7 +124,7 @@ export async function captureVideo() {
         state.isRecording         = false;
         state.activeMediaRecorder = null;
         refs.panel.classList.remove('dl-panel-animating');
-        refs.statusEl.textContent        = '❌ Recording failed';
+        refs.statusEl.textContent        = 'Recording failed';
         refs.statusEl.style.color        = '#ff6b6b';
         refs.captureBtn.textContent           = 'Record current video';
         refs.captureBtn.style.backgroundColor = '#313135';

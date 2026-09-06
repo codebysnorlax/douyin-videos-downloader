@@ -370,7 +370,7 @@ export function updateUI() {
             refs.panel.classList.remove('dl-panel-animating');
         }
 
-        refs.statusEl.textContent = '⬇ Downloading...';
+        refs.statusEl.textContent = 'Downloading...';
         return;
     }
 

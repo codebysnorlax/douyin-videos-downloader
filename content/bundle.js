@@ -170,16 +170,8 @@
             </div>
         </div>
     `;
-    const targetContainer = document.body || document.documentElement;
-    if (targetContainer) {
-      targetContainer.appendChild(ui);
-      console.log("[Douyin Downloader] Injected #douyin-dl-ui into container");
-    } else {
-      document.addEventListener("DOMContentLoaded", () => {
-        (document.body || document.documentElement).appendChild(ui);
-        console.log("[Douyin Downloader] Injected #douyin-dl-ui on DOMContentLoaded");
-      });
-    }
+    document.body.appendChild(ui);
+    console.log("[Douyin Downloader] Injected #douyin-dl-ui into document.body");
     refs.ui = ui;
     refs.panel = document.getElementById("dl-panel");
     refs.titleEl = document.getElementById("dl-title");
@@ -331,7 +323,7 @@
       } else {
         refs.panel.classList.remove("dl-panel-animating");
       }
-      refs.statusEl.textContent = "\u2B07 Downloading...";
+      refs.statusEl.textContent = "Downloading...";
       return;
     }
     resetDownloadBtn();
@@ -885,7 +877,7 @@
   // content/downloader.js
   async function downloadVideo() {
     if (!state.currentUrl || state.currentUrl.startsWith("blob:")) {
-      refs.statusEl.textContent = "\u274C No direct URL available";
+      refs.statusEl.textContent = "No direct URL available";
       return;
     }
     state.isDownloading = true;
@@ -942,7 +934,7 @@
             if (resp.response && resp.response.size > 1e4) {
               triggerBlobDownload(resp.response, filename);
               cleanup();
-              refs.statusEl.textContent = "\u2713 Download complete!";
+              refs.statusEl.textContent = "Download complete!";
               setTimeout(updateUI, 2e3);
             } else {
               await fetchDownload(urlToDownload, filename);
@@ -980,7 +972,7 @@
             const blob = await response.blob();
             if (isValidVideoBlob(blob)) {
               triggerBlobDownload(blob, filename);
-              refs.statusEl.textContent = "\u2713 Download complete!";
+              refs.statusEl.textContent = "Download complete!";
               setTimeout(updateUI, 2e3);
               return true;
             }
@@ -997,7 +989,7 @@
     }
     if (await tryUrls(urlsToTry)) return;
     if (awemeId) {
-      refs.statusEl.textContent = "\u2B07 Fetching fresh URLs...";
+      refs.statusEl.textContent = "Fetching fresh URLs...";
       try {
         const apiUrl = `https://www.douyin.com/aweme/v1/web/aweme/detail/?aweme_id=${awemeId}&aid=6383&device_platform=web`;
         const resp = await originalFetch(apiUrl, {
@@ -1018,11 +1010,11 @@
       }
     }
     if (awemeId) {
-      refs.statusEl.textContent = "\u2B07 Opening video page...";
+      refs.statusEl.textContent = "Opening video page...";
       window.open(`https://www.douyin.com/video/${awemeId}`, "_blank");
       setTimeout(updateUI, 3e3);
     } else {
-      refs.statusEl.textContent = "\u2B07 Opening download page...";
+      refs.statusEl.textContent = "Opening download page...";
       openDownloadTab(url, filename);
       setTimeout(updateUI, 3e3);
     }
@@ -1057,7 +1049,7 @@
 <html><head><title>Downloading...</title></head>
 <body style="background:#111;color:#fff;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
 <div style="text-align:center">
-<h2>\u2B07 Downloading video...</h2>
+<h2>Downloading video...</h2>
 <p id="st">Fetching from CDN...</p>
 </div>
 <script>
@@ -1091,11 +1083,11 @@
   // content/recorder.js
   async function captureVideo() {
     if (!state.currentVideo) {
-      refs.statusEl.textContent = "\u274C No video to record";
+      refs.statusEl.textContent = "No video to record";
       return;
     }
     if (typeof state.currentVideo.captureStream !== "function") {
-      refs.statusEl.textContent = "\u274C Record not supported on Android";
+      refs.statusEl.textContent = "Record not supported on Android";
       refs.statusEl.style.color = "#ff6b6b";
       return;
     }
@@ -1106,7 +1098,7 @@
       return;
     }
     state.isRecording = true;
-    refs.statusEl.textContent = "\u{1F534} Recording...";
+    refs.statusEl.textContent = "Recording...";
     refs.statusEl.style.color = "#ff6b6b";
     refs.captureBtn.textContent = "Stop Recording";
     refs.captureBtn.style.backgroundColor = "#8c2d2d";
@@ -1132,7 +1124,7 @@
         state.isRecording = false;
         state.activeMediaRecorder = null;
         refs.panel.classList.remove("dl-panel-animating");
-        refs.statusEl.textContent = "\u2713 Recording saved!";
+        refs.statusEl.textContent = "Recording saved!";
         refs.statusEl.style.color = "#675FA5";
         refs.captureBtn.textContent = "Record current video";
         refs.captureBtn.style.backgroundColor = "#313135";
@@ -1149,7 +1141,7 @@
       state.isRecording = false;
       state.activeMediaRecorder = null;
       refs.panel.classList.remove("dl-panel-animating");
-      refs.statusEl.textContent = "\u274C Recording failed";
+      refs.statusEl.textContent = "Recording failed";
       refs.statusEl.style.color = "#ff6b6b";
       refs.captureBtn.textContent = "Record current video";
       refs.captureBtn.style.backgroundColor = "#313135";
@@ -1158,70 +1150,28 @@
     }
   }
 
-  // ── Robust panel injection ────────────────────────────────────────────────
-  // Douyin is a React SPA that can replace document.body contents during
-  // hydration/navigation, which may remove our injected panel. This function
-  // handles both initial injection and re-injection.
-  function injectPanel() {
-    var existingUI = document.getElementById("douyin-dl-ui");
-    if (existingUI) existingUI.remove();
-    createPanel();
-    console.log("[Douyin Downloader] createPanel() completed. refs.panel:", refs.panel);
-    if (refs.downloadBtn) refs.downloadBtn.onclick = downloadVideo;
-    if (refs.compactBtn) refs.compactBtn.onclick = downloadVideo;
-    if (refs.compactBtn) refs.compactBtn.ondblclick = (e) => {
-      e.stopPropagation();
-      toggleUiMode();
-    };
-    if (refs.captureBtn) refs.captureBtn.onclick = captureVideo;
+  // content/index.js
+  console.log("[Douyin Downloader] content/index.js entry point running...");
+  var existing = document.getElementById("douyin-dl-ui");
+  if (existing) {
+    console.log("[Douyin Downloader] Removing existing UI wrapper element");
+    existing.remove();
   }
-
-  // Wait for document.body to be available before injecting
-  function ensurePanelInjected() {
-    if (document.body) {
-      injectPanel();
-      setupListeners();
-      setTimeout(() => {
-        trackVideo();
-        updateUI();
-      }, 1e3);
-    } else {
-      // body not ready yet — wait and retry
-      console.log("[Douyin Downloader] document.body not ready, waiting...");
-      var bodyWait = setInterval(() => {
-        if (document.body) {
-          clearInterval(bodyWait);
-          injectPanel();
-          setupListeners();
-          setTimeout(() => {
-            trackVideo();
-            updateUI();
-          }, 1e3);
-        }
-      }, 100);
-    }
-  }
-
-  ensurePanelInjected();
-
-  // ── Watchdog: re-inject panel if Douyin's SPA removes it ─────────────────
-  // Douyin's React app may replace body contents during route transitions.
-  // This observer detects when our panel is removed and re-creates it.
-  var panelWatchdog = new MutationObserver(() => {
-    if (!document.getElementById("douyin-dl-ui") && document.body) {
-      console.log("[Douyin Downloader] Panel was removed from DOM, re-injecting...");
-      injectPanel();
-      trackVideo();
-      updateUI();
-    }
-  });
-  if (document.body) {
-    panelWatchdog.observe(document.body, { childList: true });
-  } else {
-    document.addEventListener("DOMContentLoaded", () => {
-      panelWatchdog.observe(document.body, { childList: true });
-    });
-  }
+  console.log("[Douyin Downloader] Calling createPanel()...");
+  createPanel();
+  console.log("[Douyin Downloader] createPanel() completed. refs.panel:", refs.panel);
+  if (refs.downloadBtn) refs.downloadBtn.onclick = downloadVideo;
+  if (refs.compactBtn) refs.compactBtn.onclick = downloadVideo;
+  if (refs.compactBtn) refs.compactBtn.ondblclick = (e) => {
+    e.stopPropagation();
+    toggleUiMode();
+  };
+  if (refs.captureBtn) refs.captureBtn.onclick = captureVideo;
+  setupListeners();
+  setTimeout(() => {
+    trackVideo();
+    updateUI();
+  }, 1e3);
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "togglePanel") {
       let panel = document.getElementById("dl-panel");
