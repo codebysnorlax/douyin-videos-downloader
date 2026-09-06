@@ -3,6 +3,13 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+    // ── Inject version from manifest (single source of truth) ────────────────
+    const { version } = chrome.runtime.getManifest();
+    const badgeVer  = document.getElementById('badge-ver');
+    const footerVer = document.getElementById('footer-ver');
+    if (badgeVer)  badgeVer.textContent  = `v${version}`;
+    if (footerVer) footerVer.textContent = `v${version}`;
+
     const togglePanel    = document.getElementById('toggle-panel');
     const toggleAutocopy = document.getElementById('toggle-autocopy');
     const btnDownload    = document.getElementById('btn-download');
