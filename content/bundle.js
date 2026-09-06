@@ -37,6 +37,13 @@
   var SVG_EXPAND = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V4h4M16 4h4v4M4 16v4h4M20 16v4h-4"></path></svg>`;
   var SVG_CLOSE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
   var SVG_DOWNLOAD = `<svg class="dl-compact-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7B73B9" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`;
+  function parseSvg(svgString) {
+    const doc = new DOMParser().parseFromString(svgString, "image/svg+xml");
+    return doc.documentElement;
+  }
+  function setIcon(el, svgString) {
+    el.replaceChildren(parseSvg(svgString));
+  }
   var refs = {
     /** <div id="dl-status"> — status text */
     statusEl: null,
@@ -93,12 +100,12 @@
     const isCompact = mode === "compact";
     refs.panel.classList.toggle("dl-compact", isCompact);
     if (refs.toggleBtn) {
-      refs.toggleBtn.innerHTML = isCompact ? SVG_EXPAND : SVG_MINIMIZE;
+      setIcon(refs.toggleBtn, isCompact ? SVG_EXPAND : SVG_MINIMIZE);
       refs.toggleBtn.title = isCompact ? "Expand Panel" : "Compact Panel";
     }
     const toggleCompactBtn = document.getElementById("dl-btn-toggle-compact");
     if (toggleCompactBtn) {
-      toggleCompactBtn.innerHTML = SVG_EXPAND;
+      setIcon(toggleCompactBtn, SVG_EXPAND);
       toggleCompactBtn.title = "Expand Panel";
     }
     if (refs.panel.classList.contains("has-been-dragged")) {
@@ -125,51 +132,93 @@
     console.log("[Douyin Downloader] createPanel() executing...");
     const ui = document.createElement("div");
     ui.id = "douyin-dl-ui";
-    ui.innerHTML = `
-        <div id="dl-panel">
-            <button id="dl-btn-toggle" class="dl-btn-icon dl-btn-toggle" title="Compact Panel">
-                ${SVG_MINIMIZE}
-            </button>
-            <button id="dl-btn-close" class="dl-btn-icon dl-btn-close" title="Close Panel">
-                ${SVG_CLOSE}
-            </button>
-
-            <div class="dl-expanded-content">
-                <div class="dl-header">
-                    <div class="dl-title" id="dl-title">Douyin Downloader</div>
-
-                    <div class="dl-status-row">
-                        <div id="dl-status" class="dl-status scanning">Scanning for videos...</div>
-                        <div id="dl-aweme-id" class="dl-aweme-id"></div>
-                    </div>
-
-                    <div id="dl-url-display" class="dl-url-display dl-url-hoverable">No video detected</div>
-                </div>
-
-                <div class="dl-btn-row">
-                    <button id="dl-btn-capture" class="dl-btn dl-btn-record">Record current video</button>
-                    <button id="dl-btn-download" class="dl-btn dl-btn-download">
-                        <span id="dl-btn-text">Download this video</span>
-                    </button>
-                </div>
-            </div>
-
-            <div class="dl-compact-content">
-                <div class="dl-compact-top-bar">
-                    <button id="dl-btn-toggle-compact" class="dl-btn-icon dl-btn-toggle-compact" title="Expand Panel">
-                        ${SVG_EXPAND}
-                    </button>
-                    <button id="dl-btn-close-compact" class="dl-btn-icon dl-btn-close-compact" title="Close Panel">
-                        ${SVG_CLOSE}
-                    </button>
-                </div>
-                <button id="dl-compact-btn" class="dl-compact-btn" title="Download this video">
-                    ${SVG_DOWNLOAD}
-                    <div class="dl-compact-spinner" id="dl-compact-spinner"></div>
-                </button>
-            </div>
-        </div>
-    `;
+    const panel = document.createElement("div");
+    panel.id = "dl-panel";
+    const btnToggle = document.createElement("button");
+    btnToggle.id = "dl-btn-toggle";
+    btnToggle.className = "dl-btn-icon dl-btn-toggle";
+    btnToggle.title = "Compact Panel";
+    btnToggle.appendChild(parseSvg(SVG_MINIMIZE));
+    panel.appendChild(btnToggle);
+    const btnClose = document.createElement("button");
+    btnClose.id = "dl-btn-close";
+    btnClose.className = "dl-btn-icon dl-btn-close";
+    btnClose.title = "Close Panel";
+    btnClose.appendChild(parseSvg(SVG_CLOSE));
+    panel.appendChild(btnClose);
+    const expandedContent = document.createElement("div");
+    expandedContent.className = "dl-expanded-content";
+    const header = document.createElement("div");
+    header.className = "dl-header";
+    const titleEl = document.createElement("div");
+    titleEl.className = "dl-title";
+    titleEl.id = "dl-title";
+    titleEl.textContent = "Douyin Downloader";
+    header.appendChild(titleEl);
+    const statusRow = document.createElement("div");
+    statusRow.className = "dl-status-row";
+    const statusEl = document.createElement("div");
+    statusEl.id = "dl-status";
+    statusEl.className = "dl-status scanning";
+    statusEl.textContent = "Scanning for videos...";
+    const awemeIdEl = document.createElement("div");
+    awemeIdEl.id = "dl-aweme-id";
+    awemeIdEl.className = "dl-aweme-id";
+    statusRow.appendChild(statusEl);
+    statusRow.appendChild(awemeIdEl);
+    header.appendChild(statusRow);
+    const urlDisplay = document.createElement("div");
+    urlDisplay.id = "dl-url-display";
+    urlDisplay.className = "dl-url-display dl-url-hoverable";
+    urlDisplay.textContent = "No video detected";
+    header.appendChild(urlDisplay);
+    expandedContent.appendChild(header);
+    const btnRow = document.createElement("div");
+    btnRow.className = "dl-btn-row";
+    const captureBtn = document.createElement("button");
+    captureBtn.id = "dl-btn-capture";
+    captureBtn.className = "dl-btn dl-btn-record";
+    captureBtn.textContent = "Record current video";
+    const downloadBtn = document.createElement("button");
+    downloadBtn.id = "dl-btn-download";
+    downloadBtn.className = "dl-btn dl-btn-download";
+    const btnText = document.createElement("span");
+    btnText.id = "dl-btn-text";
+    btnText.textContent = "Download this video";
+    downloadBtn.appendChild(btnText);
+    btnRow.appendChild(captureBtn);
+    btnRow.appendChild(downloadBtn);
+    expandedContent.appendChild(btnRow);
+    panel.appendChild(expandedContent);
+    const compactContent = document.createElement("div");
+    compactContent.className = "dl-compact-content";
+    const compactTopBar = document.createElement("div");
+    compactTopBar.className = "dl-compact-top-bar";
+    const btnToggleCompact = document.createElement("button");
+    btnToggleCompact.id = "dl-btn-toggle-compact";
+    btnToggleCompact.className = "dl-btn-icon dl-btn-toggle-compact";
+    btnToggleCompact.title = "Expand Panel";
+    btnToggleCompact.appendChild(parseSvg(SVG_EXPAND));
+    const btnCloseCompact = document.createElement("button");
+    btnCloseCompact.id = "dl-btn-close-compact";
+    btnCloseCompact.className = "dl-btn-icon dl-btn-close-compact";
+    btnCloseCompact.title = "Close Panel";
+    btnCloseCompact.appendChild(parseSvg(SVG_CLOSE));
+    compactTopBar.appendChild(btnToggleCompact);
+    compactTopBar.appendChild(btnCloseCompact);
+    compactContent.appendChild(compactTopBar);
+    const compactBtn = document.createElement("button");
+    compactBtn.id = "dl-compact-btn";
+    compactBtn.className = "dl-compact-btn";
+    compactBtn.title = "Download this video";
+    compactBtn.appendChild(parseSvg(SVG_DOWNLOAD));
+    const compactSpinner = document.createElement("div");
+    compactSpinner.className = "dl-compact-spinner";
+    compactSpinner.id = "dl-compact-spinner";
+    compactBtn.appendChild(compactSpinner);
+    compactContent.appendChild(compactBtn);
+    panel.appendChild(compactContent);
+    ui.appendChild(panel);
     document.body.appendChild(ui);
     console.log("[Douyin Downloader] Injected #douyin-dl-ui into document.body");
     refs.ui = ui;
