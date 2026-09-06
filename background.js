@@ -20,6 +20,13 @@
  * to work without changes.
  */
 
+// ── Clean up stale storage on install/update ──────────────────────────────────
+// The showPanel preference is no longer used; the panel always auto-appears
+// on page load. Remove any leftover value so it doesn't cause confusion.
+chrome.runtime.onInstalled.addListener(() => {
+    chrome.storage.local.remove('showPanel');
+});
+
 // ── Message router ────────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

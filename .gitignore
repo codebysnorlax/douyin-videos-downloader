@@ -1,5 +1,3 @@
 demo/
 implementation_plan.md
 *.zip
-node_modules/
-# bundle.js is generated but intentionally committed — it ships with the extension

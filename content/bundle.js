@@ -1158,37 +1158,70 @@
     }
   }
 
-  // content/index.js
-  console.log("[Douyin Downloader] content/index.js entry point running...");
-  var existing = document.getElementById("douyin-dl-ui");
-  if (existing) {
-    console.log("[Douyin Downloader] Removing existing UI wrapper element");
-    existing.remove();
+  // ── Robust panel injection ────────────────────────────────────────────────
+  // Douyin is a React SPA that can replace document.body contents during
+  // hydration/navigation, which may remove our injected panel. This function
+  // handles both initial injection and re-injection.
+  function injectPanel() {
+    var existingUI = document.getElementById("douyin-dl-ui");
+    if (existingUI) existingUI.remove();
+    createPanel();
+    console.log("[Douyin Downloader] createPanel() completed. refs.panel:", refs.panel);
+    if (refs.downloadBtn) refs.downloadBtn.onclick = downloadVideo;
+    if (refs.compactBtn) refs.compactBtn.onclick = downloadVideo;
+    if (refs.compactBtn) refs.compactBtn.ondblclick = (e) => {
+      e.stopPropagation();
+      toggleUiMode();
+    };
+    if (refs.captureBtn) refs.captureBtn.onclick = captureVideo;
   }
-  console.log("[Douyin Downloader] Calling createPanel()...");
-  createPanel();
-  console.log("[Douyin Downloader] createPanel() completed. refs.panel:", refs.panel);
-  if (refs.panel) {
-    refs.panel.style.display = "";
+
+  // Wait for document.body to be available before injecting
+  function ensurePanelInjected() {
+    if (document.body) {
+      injectPanel();
+      setupListeners();
+      setTimeout(() => {
+        trackVideo();
+        updateUI();
+      }, 1e3);
+    } else {
+      // body not ready yet — wait and retry
+      console.log("[Douyin Downloader] document.body not ready, waiting...");
+      var bodyWait = setInterval(() => {
+        if (document.body) {
+          clearInterval(bodyWait);
+          injectPanel();
+          setupListeners();
+          setTimeout(() => {
+            trackVideo();
+            updateUI();
+          }, 1e3);
+        }
+      }, 100);
+    }
   }
-  chrome.storage.local.get(["uiMode"], (result) => {
-    console.log("[Douyin Downloader] Storage loaded uiMode:", result.uiMode);
-    if (result.uiMode) {
-      setUiMode(result.uiMode);
+
+  ensurePanelInjected();
+
+  // ── Watchdog: re-inject panel if Douyin's SPA removes it ─────────────────
+  // Douyin's React app may replace body contents during route transitions.
+  // This observer detects when our panel is removed and re-creates it.
+  var panelWatchdog = new MutationObserver(() => {
+    if (!document.getElementById("douyin-dl-ui") && document.body) {
+      console.log("[Douyin Downloader] Panel was removed from DOM, re-injecting...");
+      injectPanel();
+      trackVideo();
+      updateUI();
     }
   });
-  if (refs.downloadBtn) refs.downloadBtn.onclick = downloadVideo;
-  if (refs.compactBtn) refs.compactBtn.onclick = downloadVideo;
-  if (refs.compactBtn) refs.compactBtn.ondblclick = (e) => {
-    e.stopPropagation();
-    toggleUiMode();
-  };
-  if (refs.captureBtn) refs.captureBtn.onclick = captureVideo;
-  setupListeners();
-  setTimeout(() => {
-    trackVideo();
-    updateUI();
-  }, 1e3);
+  if (document.body) {
+    panelWatchdog.observe(document.body, { childList: true });
+  } else {
+    document.addEventListener("DOMContentLoaded", () => {
+      panelWatchdog.observe(document.body, { childList: true });
+    });
+  }
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "togglePanel") {
       let panel = document.getElementById("dl-panel");

@@ -90,30 +90,14 @@ export function setUiMode(mode) {
     const isCompact = mode === 'compact';
     refs.panel.classList.toggle('dl-compact', isCompact);
 
-function _setSVGContent(el, svgString) {
-    if (!el) return;
-    const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml');
-    if (doc.documentElement) {
-        el.replaceChildren(doc.documentElement);
-    }
-}
-
-function _setHTMLContent(el, htmlString) {
-    if (!el) return;
-    const doc = new DOMParser().parseFromString(htmlString, 'text/html');
-    if (doc.body) {
-        el.replaceChildren(...doc.body.childNodes);
-    }
-}
-
     if (refs.toggleBtn) {
-        _setSVGContent(refs.toggleBtn, isCompact ? SVG_EXPAND : SVG_MINIMIZE);
+        refs.toggleBtn.innerHTML = isCompact ? SVG_EXPAND : SVG_MINIMIZE;
         refs.toggleBtn.title     = isCompact ? "Expand Panel" : "Compact Panel";
     }
 
     const toggleCompactBtn = document.getElementById('dl-btn-toggle-compact');
     if (toggleCompactBtn) {
-        _setSVGContent(toggleCompactBtn, SVG_EXPAND);
+        toggleCompactBtn.innerHTML = SVG_EXPAND;
         toggleCompactBtn.title     = "Expand Panel";
     }
 
@@ -151,7 +135,7 @@ export function createPanel() {
     const ui = document.createElement('div');
     ui.id = 'douyin-dl-ui';
 
-    _setHTMLContent(ui, `
+    ui.innerHTML = `
         <div id="dl-panel">
             <button id="dl-btn-toggle" class="dl-btn-icon dl-btn-toggle" title="Compact Panel">
                 ${SVG_MINIMIZE}
@@ -195,7 +179,7 @@ export function createPanel() {
                 </button>
             </div>
         </div>
-    `);
+    `;
 
     document.body.appendChild(ui);
     console.log('[Douyin Downloader] Injected #douyin-dl-ui into document.body');

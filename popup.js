@@ -14,14 +14,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const statDownloads  = document.getElementById('stat-downloads');
 
     // ── Load saved preferences & download stats ──────────────────────────────
-    chrome.storage.local.get(['showPanel', 'autoCopy', 'downloadCount'], (result) => {
-        // Default panel to ON if never explicitly set by the user
-        const panelOn = result.showPanel !== false;
-        togglePanel.checked = panelOn;
-        if (!panelOn) chrome.storage.local.set({ showPanel: true });
+    chrome.storage.local.get(['autoCopy', 'downloadCount'], (result) => {
         if (result.autoCopy !== undefined) toggleAutocopy.checked = result.autoCopy;
         if (statDownloads) statDownloads.textContent = result.downloadCount || 0;
     });
+
+    // Panel toggle defaults to ON (panel always auto-appears on page load).
+    togglePanel.checked = true;
 
     // Listen for live updates to storage (e.g. download count incremented)
     chrome.storage.onChanged.addListener((changes, area) => {
@@ -81,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // ── Event Listeners: Preferences ──────────────────────────────────────────
     togglePanel.addEventListener('change', () => {
         const enabled = togglePanel.checked;
-        chrome.storage.local.set({ showPanel: enabled });
+        // Session-only toggle: controls panel on the current tab without persisting
         sendToActiveDouyinTab({ action: 'togglePanel', enabled });
     });
 
@@ -114,10 +113,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ── Helper: Send message to active Douyin tab ─────────────────────────────
     function sendToActiveDouyinTab(message) {
-        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-            const tab = tabs[0];
-            if (tab && tab.url && tab.url.includes('douyin.com')) {
-                chrome.tabs.sendMessage(tab.id, message);
+        chrome.tabs.query({ active: true, currentWindow: true, url: "*://*.douyin.com/*" }, (tabs) => {
+            if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, message);
             }
         });
     }

@@ -39,21 +39,10 @@ console.log('[Douyin Downloader] Calling createPanel()...');
 createPanel();
 console.log('[Douyin Downloader] createPanel() completed. refs.panel:', refs.panel);
 
-// Respect user's saved panel visibility preference & UI mode
-chrome.storage.local.get(['showPanel', 'uiMode'], (result) => {
-    console.log('[Douyin Downloader] Storage loaded:', result);
-    if (result.showPanel === false && refs.panel) {
-        console.log('[Douyin Downloader] showPanel is false, hiding panel');
-        refs.panel.style.display = 'none';
-    } else if (refs.panel) {
-        console.log('[Douyin Downloader] Ensuring refs.panel.style.display is visible');
-        refs.panel.style.display = '';
-    }
-    if (result.uiMode) {
-        console.log('[Douyin Downloader] Applying saved uiMode:', result.uiMode);
-        setUiMode(result.uiMode);
-    }
-});
+// Always start in expanded mode so the panel is clearly visible on every
+// page load. Compact mode (transparent bg, 46px) is nearly invisible and
+// caused users to think the extension was not running.
+// Users can still switch to compact mode via the toggle button.
 
 // ── Button handlers ───────────────────────────────────────────────────────────
 if (refs.downloadBtn) refs.downloadBtn.onclick = downloadVideo;
