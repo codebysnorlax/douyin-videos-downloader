@@ -28,12 +28,14 @@ export const SVG_DOWNLOAD = `<svg class="dl-compact-icon" width="28" height="28"
 // No user data is ever passed here — all callers use the SVG_* constants above.
 function parseSvg(svgString) {
     const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml');
-    return doc.documentElement;
+    if (doc.querySelector('parsererror')) return null;
+    return document.importNode(doc.documentElement, true);
 }
 
 // Replaces all children of `el` with the parsed SVG node.
 function setIcon(el, svgString) {
-    el.replaceChildren(parseSvg(svgString));
+    const node = parseSvg(svgString);
+    if (node) el.replaceChildren(node);
 }
 
 

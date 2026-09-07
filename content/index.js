@@ -39,10 +39,11 @@ console.log('[Douyin Downloader] Calling createPanel()...');
 createPanel();
 console.log('[Douyin Downloader] createPanel() completed. refs.panel:', refs.panel);
 
-// Always start in expanded mode so the panel is clearly visible on every
-// page load. Compact mode (transparent bg, 46px) is nearly invisible and
-// caused users to think the extension was not running.
-// Users can still switch to compact mode via the toggle button.
+// Restore saved UI mode (compact / expanded) — panel is always visible on
+// load regardless of mode because showPanel is no longer persisted.
+chrome.storage.local.get(['uiMode'], (result) => {
+    if (result.uiMode) setUiMode(result.uiMode);
+});
 
 // ── Button handlers ───────────────────────────────────────────────────────────
 if (refs.downloadBtn) refs.downloadBtn.onclick = downloadVideo;

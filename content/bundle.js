@@ -33,17 +33,46 @@
   };
 
   // content/ui.js
-  var SVG_MINIMIZE = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4v4H4M16 4v4h4M8 20v-4H4M16 20v-4h4"></path></svg>`;
-  var SVG_EXPAND = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V4h4M16 4h4v4M4 16v4h4M20 16v4h-4"></path></svg>`;
-  var SVG_CLOSE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
-  var SVG_DOWNLOAD = `<svg class="dl-compact-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7B73B9" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>`;
-  function parseSvg(svgString) {
-    const doc = new DOMParser().parseFromString(svgString, "image/svg+xml");
-    return doc.documentElement;
+  // ── SVG icon builders (createElementNS — no innerHTML, AMO-safe) ──────────
+  var SVG_NS = "http://www.w3.org/2000/svg";
+  function _svgEl(tag, attrs) {
+    var el = document.createElementNS(SVG_NS, tag);
+    for (var k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
   }
-  function setIcon(el, svgString) {
-    el.replaceChildren(parseSvg(svgString));
+  function _baseSvg(w, h, stroke, sw) {
+    return _svgEl("svg", { width: w, height: h, viewBox: "0 0 24 24", fill: "none",
+      stroke: stroke, "stroke-width": sw, "stroke-linecap": "round", "stroke-linejoin": "round" });
   }
+  function makeIconMinimize() {
+    var svg = _baseSvg("14", "14", "currentColor", "2.2");
+    svg.appendChild(_svgEl("path", { d: "M8 4v4H4M16 4v4h4M8 20v-4H4M16 20v-4h4" }));
+    return svg;
+  }
+  function makeIconExpand() {
+    var svg = _baseSvg("14", "14", "currentColor", "2.2");
+    svg.appendChild(_svgEl("path", { d: "M4 8V4h4M16 4h4v4M4 16v4h4M20 16v4h-4" }));
+    return svg;
+  }
+  function makeIconClose() {
+    var svg = _baseSvg("13", "13", "currentColor", "2.2");
+    svg.appendChild(_svgEl("line", { x1: "18", y1: "6", x2: "6", y2: "18" }));
+    svg.appendChild(_svgEl("line", { x1: "6", y1: "6", x2: "18", y2: "18" }));
+    return svg;
+  }
+  function makeIconDownload() {
+    var svg = _baseSvg("28", "28", "#7B73B9", "2.5");
+    svg.setAttribute("class", "dl-compact-icon");
+    svg.appendChild(_svgEl("path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" }));
+    svg.appendChild(_svgEl("polyline", { points: "7 10 12 15 17 10" }));
+    svg.appendChild(_svgEl("line", { x1: "12", y1: "15", x2: "12", y2: "3" }));
+    return svg;
+  }
+  function setIcon(el, iconFn) {
+    while (el.firstChild) el.removeChild(el.firstChild);
+    el.appendChild(iconFn());
+  }
+
   var refs = {
     /** <div id="dl-status"> — status text */
     statusEl: null,
@@ -100,12 +129,12 @@
     const isCompact = mode === "compact";
     refs.panel.classList.toggle("dl-compact", isCompact);
     if (refs.toggleBtn) {
-      setIcon(refs.toggleBtn, isCompact ? SVG_EXPAND : SVG_MINIMIZE);
+      setIcon(refs.toggleBtn, isCompact ? makeIconExpand : makeIconMinimize);
       refs.toggleBtn.title = isCompact ? "Expand Panel" : "Compact Panel";
     }
     const toggleCompactBtn = document.getElementById("dl-btn-toggle-compact");
     if (toggleCompactBtn) {
-      setIcon(toggleCompactBtn, SVG_EXPAND);
+      setIcon(toggleCompactBtn, makeIconExpand);
       toggleCompactBtn.title = "Expand Panel";
     }
     if (refs.panel.classList.contains("has-been-dragged")) {
@@ -128,99 +157,62 @@
       chrome.storage.local.set({ uiMode: mode });
     }
   }
+  function _btn(id, cls, title, iconFn) {
+    var b = document.createElement("button");
+    b.id = id; b.className = cls; b.title = title;
+    if (iconFn) b.appendChild(iconFn());
+    return b;
+  }
   function createPanel() {
     console.log("[Douyin Downloader] createPanel() executing...");
-    const ui = document.createElement("div");
-    ui.id = "douyin-dl-ui";
-    const panel = document.createElement("div");
-    panel.id = "dl-panel";
-    const btnToggle = document.createElement("button");
-    btnToggle.id = "dl-btn-toggle";
-    btnToggle.className = "dl-btn-icon dl-btn-toggle";
-    btnToggle.title = "Compact Panel";
-    btnToggle.appendChild(parseSvg(SVG_MINIMIZE));
-    panel.appendChild(btnToggle);
-    const btnClose = document.createElement("button");
-    btnClose.id = "dl-btn-close";
-    btnClose.className = "dl-btn-icon dl-btn-close";
-    btnClose.title = "Close Panel";
-    btnClose.appendChild(parseSvg(SVG_CLOSE));
-    panel.appendChild(btnClose);
-    const expandedContent = document.createElement("div");
-    expandedContent.className = "dl-expanded-content";
-    const header = document.createElement("div");
-    header.className = "dl-header";
-    const titleEl = document.createElement("div");
-    titleEl.className = "dl-title";
-    titleEl.id = "dl-title";
-    titleEl.textContent = "Douyin Downloader";
+    var ui = document.createElement("div"); ui.id = "douyin-dl-ui";
+    var panel = document.createElement("div"); panel.id = "dl-panel";
+    // Expanded-mode header buttons
+    panel.appendChild(_btn("dl-btn-toggle", "dl-btn-icon dl-btn-toggle", "Compact Panel", makeIconMinimize));
+    panel.appendChild(_btn("dl-btn-close",  "dl-btn-icon dl-btn-close",  "Close Panel",   makeIconClose));
+    // Expanded content
+    var expanded = document.createElement("div"); expanded.className = "dl-expanded-content";
+    var header = document.createElement("div"); header.className = "dl-header";
+    var titleEl = document.createElement("div"); titleEl.className = "dl-title"; titleEl.id = "dl-title"; titleEl.textContent = "Douyin Downloader";
     header.appendChild(titleEl);
-    const statusRow = document.createElement("div");
-    statusRow.className = "dl-status-row";
-    const statusEl = document.createElement("div");
-    statusEl.id = "dl-status";
-    statusEl.className = "dl-status scanning";
-    statusEl.textContent = "Scanning for videos...";
-    const awemeIdEl = document.createElement("div");
-    awemeIdEl.id = "dl-aweme-id";
-    awemeIdEl.className = "dl-aweme-id";
-    statusRow.appendChild(statusEl);
-    statusRow.appendChild(awemeIdEl);
+    var statusRow = document.createElement("div"); statusRow.className = "dl-status-row";
+    var statusEl = document.createElement("div"); statusEl.id = "dl-status"; statusEl.className = "dl-status scanning"; statusEl.textContent = "Scanning for videos...";
+    var awemeIdEl = document.createElement("div"); awemeIdEl.id = "dl-aweme-id"; awemeIdEl.className = "dl-aweme-id";
+    statusRow.appendChild(statusEl); statusRow.appendChild(awemeIdEl);
     header.appendChild(statusRow);
-    const urlDisplay = document.createElement("div");
-    urlDisplay.id = "dl-url-display";
-    urlDisplay.className = "dl-url-display dl-url-hoverable";
-    urlDisplay.textContent = "No video detected";
+    var urlDisplay = document.createElement("div"); urlDisplay.id = "dl-url-display"; urlDisplay.className = "dl-url-display dl-url-hoverable"; urlDisplay.textContent = "No video detected";
     header.appendChild(urlDisplay);
-    expandedContent.appendChild(header);
-    const btnRow = document.createElement("div");
-    btnRow.className = "dl-btn-row";
-    const captureBtn = document.createElement("button");
-    captureBtn.id = "dl-btn-capture";
-    captureBtn.className = "dl-btn dl-btn-record";
-    captureBtn.textContent = "Record current video";
-    const downloadBtn = document.createElement("button");
-    downloadBtn.id = "dl-btn-download";
-    downloadBtn.className = "dl-btn dl-btn-download";
-    const btnText = document.createElement("span");
-    btnText.id = "dl-btn-text";
-    btnText.textContent = "Download this video";
+    expanded.appendChild(header);
+    var btnRow = document.createElement("div"); btnRow.className = "dl-btn-row";
+    var captureBtn = document.createElement("button"); captureBtn.id = "dl-btn-capture"; captureBtn.className = "dl-btn dl-btn-record"; captureBtn.textContent = "Record current video";
+    var downloadBtn = document.createElement("button"); downloadBtn.id = "dl-btn-download"; downloadBtn.className = "dl-btn dl-btn-download";
+    var btnText = document.createElement("span"); btnText.id = "dl-btn-text"; btnText.textContent = "Download this video";
     downloadBtn.appendChild(btnText);
-    btnRow.appendChild(captureBtn);
-    btnRow.appendChild(downloadBtn);
-    expandedContent.appendChild(btnRow);
-    panel.appendChild(expandedContent);
-    const compactContent = document.createElement("div");
-    compactContent.className = "dl-compact-content";
-    const compactTopBar = document.createElement("div");
-    compactTopBar.className = "dl-compact-top-bar";
-    const btnToggleCompact = document.createElement("button");
-    btnToggleCompact.id = "dl-btn-toggle-compact";
-    btnToggleCompact.className = "dl-btn-icon dl-btn-toggle-compact";
-    btnToggleCompact.title = "Expand Panel";
-    btnToggleCompact.appendChild(parseSvg(SVG_EXPAND));
-    const btnCloseCompact = document.createElement("button");
-    btnCloseCompact.id = "dl-btn-close-compact";
-    btnCloseCompact.className = "dl-btn-icon dl-btn-close-compact";
-    btnCloseCompact.title = "Close Panel";
-    btnCloseCompact.appendChild(parseSvg(SVG_CLOSE));
-    compactTopBar.appendChild(btnToggleCompact);
-    compactTopBar.appendChild(btnCloseCompact);
-    compactContent.appendChild(compactTopBar);
-    const compactBtn = document.createElement("button");
-    compactBtn.id = "dl-compact-btn";
-    compactBtn.className = "dl-compact-btn";
-    compactBtn.title = "Download this video";
-    compactBtn.appendChild(parseSvg(SVG_DOWNLOAD));
-    const compactSpinner = document.createElement("div");
-    compactSpinner.className = "dl-compact-spinner";
-    compactSpinner.id = "dl-compact-spinner";
-    compactBtn.appendChild(compactSpinner);
-    compactContent.appendChild(compactBtn);
-    panel.appendChild(compactContent);
+    btnRow.appendChild(captureBtn); btnRow.appendChild(downloadBtn);
+    expanded.appendChild(btnRow);
+    panel.appendChild(expanded);
+    // Compact content
+    var compact = document.createElement("div"); compact.className = "dl-compact-content";
+    var topBar = document.createElement("div"); topBar.className = "dl-compact-top-bar";
+    topBar.appendChild(_btn("dl-btn-toggle-compact", "dl-btn-icon dl-btn-toggle-compact", "Expand Panel", makeIconExpand));
+    topBar.appendChild(_btn("dl-btn-close-compact",  "dl-btn-icon dl-btn-close-compact",  "Close Panel",  makeIconClose));
+    compact.appendChild(topBar);
+    var compactBtn = document.createElement("button"); compactBtn.id = "dl-compact-btn"; compactBtn.className = "dl-compact-btn"; compactBtn.title = "Download this video";
+    compactBtn.appendChild(makeIconDownload());
+    var spinner = document.createElement("div"); spinner.className = "dl-compact-spinner"; spinner.id = "dl-compact-spinner";
+    compactBtn.appendChild(spinner);
+    compact.appendChild(compactBtn);
+    panel.appendChild(compact);
     ui.appendChild(panel);
-    document.body.appendChild(ui);
-    console.log("[Douyin Downloader] Injected #douyin-dl-ui into document.body");
+    var targetContainer = document.body || document.documentElement;
+    if (targetContainer) {
+      targetContainer.appendChild(ui);
+      console.log("[Douyin Downloader] Injected #douyin-dl-ui into container");
+    } else {
+      document.addEventListener("DOMContentLoaded", function() {
+        (document.body || document.documentElement).appendChild(ui);
+      });
+    }
     refs.ui = ui;
     refs.panel = document.getElementById("dl-panel");
     refs.titleEl = document.getElementById("dl-title");
@@ -245,9 +237,7 @@
       const textToCopy = state.currentUrl || refs.urlDisplay.textContent;
       if (textToCopy && !textToCopy.startsWith("Checking") && !textToCopy.startsWith("No video") && !textToCopy.startsWith("Copied")) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
-          navigator.clipboard.writeText(textToCopy).catch(() => {
-            _copyFallback(textToCopy);
-          });
+          navigator.clipboard.writeText(textToCopy).catch(() => { _copyFallback(textToCopy); });
         } else {
           _copyFallback(textToCopy);
         }
@@ -1209,6 +1199,11 @@
   console.log("[Douyin Downloader] Calling createPanel()...");
   createPanel();
   console.log("[Douyin Downloader] createPanel() completed. refs.panel:", refs.panel);
+  // Restore saved UI mode (compact / expanded) — panel is always visible on
+  // load regardless of mode because showPanel is no longer persisted.
+  chrome.storage.local.get(["uiMode"], (result) => {
+    if (result.uiMode) setUiMode(result.uiMode);
+  });
   if (refs.downloadBtn) refs.downloadBtn.onclick = downloadVideo;
   if (refs.compactBtn) refs.compactBtn.onclick = downloadVideo;
   if (refs.compactBtn) refs.compactBtn.ondblclick = (e) => {
