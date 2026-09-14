@@ -4,7 +4,7 @@ This extension helps download Douyin videos from the browser. It adds a small pa
 
 [click me! |  Check it out and please leave a review if possible](https://addons.mozilla.org/addon/douyin-videos-downloader/)
 
-![Popup](assets/ui.jpg)
+![Popup](assets/ui.png)
 
 ## What it does
 
