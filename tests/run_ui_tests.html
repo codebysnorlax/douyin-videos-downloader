@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Douyin Downloader - Automated UI Tests</title>
+    <!-- Load the exact CSS used in the extension -->
+    <link rel="stylesheet" href="../content/panel.css">
+    
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: 'Segoe UI', sans-serif;
+            margin: 40px;
+        }
+        .test-results {
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            max-width: 600px;
+            border: 1px solid #333;
+        }
+        .pass { color: #4caf50; font-weight: bold; }
+        .fail { color: #f44336; font-weight: bold; }
+        .test-case { margin: 10px 0; border-bottom: 1px solid #333; padding-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <div class="test-results" id="test-output">
+        <h2>🧪 Automated UI Tests</h2>
+        <p>Testing if bundle.js correctly renders the UI without breaking...</p>
+    </div>
+
+    <!-- Mocks so bundle.js can run in an empty HTML page -->
+    <script>
+        window.chrome = {
+            storage: {
+                local: {
+                    get: (keys, cb) => cb({ uiMode: 'expanded' }),
+                    set: () => {}
+                }
+            },
+            runtime: { onMessage: { addListener: () => {} } }
+        };
+        window.fetch = async () => {};
+    </script>
+
+    <!-- Load the extension -->
+    <script src="../content/bundle.js"></script>
+
+    <!-- Run Automated Assertions -->
+    <script>
+        const output = document.getElementById('test-output');
+        let passed = 0;
+        let failed = 0;
+
+        function assertEq(name, actual, expected) {
+            const div = document.createElement('div');
+            div.className = 'test-case';
+            if (actual === expected) {
+                div.innerHTML = `<span class="pass">✔ PASS:</span> ${name}`;
+                passed++;
+            } else {
+                div.innerHTML = `<span class="fail">✖ FAIL:</span> ${name} (Expected: ${expected}, Got: ${actual})`;
+                console.error(`Test Failed: ${name}`, { actual, expected });
+                failed++;
+            }
+            output.appendChild(div);
+        }
+
+        function assertExists(name, selector) {
+            const el = document.querySelector(selector);
+            const div = document.createElement('div');
+            div.className = 'test-case';
+            if (el) {
+                div.innerHTML = `<span class="pass">✔ PASS:</span> ${name} (${selector} found)`;
+                passed++;
+            } else {
+                div.innerHTML = `<span class="fail">✖ FAIL:</span> ${name} (${selector} MISSING!)`;
+                console.error(`Test Failed: ${name} - Element missing!`);
+                failed++;
+            }
+            output.appendChild(div);
+        }
+
+        // Wait a tiny bit for bundle.js to inject the DOM
+        setTimeout(() => {
+            assertExists("Main UI Wrapper Exists", "#douyin-dl-ui");
+            assertExists("Expanded Panel Exists", "#dl-panel");
+            
+            // Check critical buttons
+            assertExists("Minimize/Maximize Button Exists", "#dl-btn-toggle");
+            assertExists("Close Button Exists", "#dl-btn-close");
+            
+            // Check SVGs inside buttons (ensure parseSvg didn't fail)
+            assertExists("Minimize SVG rendered", "#dl-btn-toggle svg");
+            assertExists("Close SVG rendered", "#dl-btn-close svg");
+            
+            // Check compact mode buttons
+            assertExists("Compact Mode Top Bar Exists", ".dl-compact-top-bar");
+            assertExists("Compact Toggle Button Exists", "#dl-btn-toggle-compact");
+            assertExists("Compact Close Button Exists", "#dl-btn-close-compact");
+
+            // Final Summary
+            const summary = document.createElement('h3');
+            summary.innerHTML = `Test Run Complete: <span class="${failed === 0 ? 'pass' : 'fail'}">${passed} Passed, ${failed} Failed</span>`;
+            output.appendChild(summary);
+            
+            if (failed > 0) {
+                alert("WARNING: UI TESTS FAILED! Do not release this build!");
+            }
+        }, 500);
+    </script>
+</body>
+</html>

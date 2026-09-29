@@ -370,6 +370,7 @@
     if (!state.currentVideo) {
       refs.statusEl.textContent = "Scanning...";
       refs.statusEl.style.color = "#675FA5";
+      refs.urlDisplay.classList.remove("dl-text-animate");
       refs.urlDisplay.textContent = "No video detected";
       refs.downloadBtn.style.opacity = "0.5";
       refs.downloadBtn.style.cursor = "not-allowed";
@@ -385,11 +386,18 @@
       return;
     }
     const isBlob = state.currentVideo.src?.startsWith("blob:");
+    if (!isBlob && window._blobTimeout) {
+      clearTimeout(window._blobTimeout);
+      window._blobTimeout = null;
+    }
     if (state.currentUrl && !state.currentUrl.startsWith("blob:")) {
       refs.statusEl.classList.remove("scanning");
       refs.statusEl.textContent = "URL found!";
       refs.statusEl.style.color = "#675FA5";
-      if (!isCopyingFeedback) refs.urlDisplay.textContent = state.currentUrl;
+      if (!isCopyingFeedback) {
+          refs.urlDisplay.classList.remove("dl-text-animate");
+          refs.urlDisplay.textContent = state.currentUrl;
+      }
       refs.downloadBtn.style.opacity = "1";
       refs.downloadBtn.style.cursor = "pointer";
       refs.downloadBtn.disabled = false;
@@ -419,7 +427,24 @@
       refs.statusEl.classList.remove("scanning");
       refs.statusEl.textContent = "Stream, Record it!";
       refs.statusEl.style.color = "#675FA5";
-      if (!isCopyingFeedback) refs.urlDisplay.textContent = state.currentVideo.src || "";
+      if (!isCopyingFeedback) {
+        if (window._blobMessageShown) {
+            refs.urlDisplay.textContent = "Douyin have chnage the CDN url Wait for devloper updates";
+        } else {
+            refs.urlDisplay.classList.remove("dl-text-animate");
+            refs.urlDisplay.textContent = state.currentVideo.src || "";
+            if (!window._blobTimeout) {
+              window._blobTimeout = setTimeout(() => {
+                if (refs.urlDisplay) {
+                  refs.urlDisplay.classList.add("dl-text-animate");
+                  refs.urlDisplay.textContent = "Douyin have chnage the CDN url Wait for devloper updates";
+                }
+                window._blobTimeout = null;
+                window._blobMessageShown = true;
+              }, 2000);
+            }
+        }
+      }
       refs.downloadBtn.style.opacity = "0.5";
       refs.downloadBtn.style.cursor = "not-allowed";
       refs.downloadBtn.disabled = true;
@@ -434,6 +459,7 @@
     } else {
       refs.statusEl.textContent = "Scanning...";
       refs.statusEl.style.color = "#675FA5";
+      refs.urlDisplay.classList.remove("dl-text-animate");
       refs.urlDisplay.textContent = "Checking network requests...";
       refs.downloadBtn.style.opacity = "0.5";
       refs.downloadBtn.style.cursor = "not-allowed";
@@ -762,7 +788,12 @@
     const url = typeof request === "string" ? request : request?.url;
     if (url) {
       const cleaned = cleanVideoUrl(url);
-      if (cleaned && looksLikeVideoUrl(cleaned)) capturedUrls.add(cleaned);
+      if (cleaned && looksLikeVideoUrl(cleaned)) {
+        if (!capturedUrls.has(cleaned)) {
+            capturedUrls.add(cleaned);
+            if (typeof trackVideo === 'function') setTimeout(trackVideo, 200);
+        }
+      }
     }
     const result = originalFetch(...args);
     if (url && isVideoApiUrl(url)) {
@@ -784,7 +815,12 @@
     this._douyinUrl = url;
     if (typeof url === "string") {
       const cleaned = cleanVideoUrl(url);
-      if (cleaned && looksLikeVideoUrl(cleaned)) capturedUrls.add(cleaned);
+      if (cleaned && looksLikeVideoUrl(cleaned)) {
+        if (!capturedUrls.has(cleaned)) {
+            capturedUrls.add(cleaned);
+            if (typeof trackVideo === 'function') setTimeout(trackVideo, 200);
+        }
+      }
     }
     return originalOpen.call(this, method, url, ...rest);
   };
@@ -837,10 +873,23 @@
         lastTrackedVideo = bestVideo;
         lastTrackedAwemeId = awemeId;
         state.currentUrl = null;
+        window._blobMessageShown = false;
+        if (window._blobTimeout) {
+            clearTimeout(window._blobTimeout);
+            window._blobTimeout = null;
+        }
       }
       if (!state.currentUrl) {
         if (awemeId && videoUrlMap.has(awemeId)) {
           state.currentUrl = videoUrlMap.get(awemeId)[0];
+        }
+        if (!state.currentUrl && awemeId) {
+          for (const url of capturedUrls) {
+            if (url.includes(awemeId)) {
+              state.currentUrl = url;
+              break;
+            }
+          }
         }
         if (!state.currentUrl && awemeId) {
           const pageUrl = getVideoUrlFromPageData(awemeId);
@@ -886,6 +935,14 @@
         if (videoUrlMap.has(awemeId)) {
           state.currentUrl = videoUrlMap.get(awemeId)[0];
           updateUI();
+        } else {
+          for (const url of capturedUrls) {
+            if (url.includes(awemeId)) {
+              state.currentUrl = url;
+              updateUI();
+              break;
+            }
+          }
         }
       }
     } catch (e) {

@@ -14,7 +14,7 @@
 
 import { state } from './state.js';
 import { refs, updateUI } from './ui.js';
-import { videoUrlMap, originalFetch, parseAwemeListFromResponse } from './network.js';
+import { videoUrlMap, originalFetch, parseAwemeListFromResponse, capturedUrls } from './network.js';
 import {
     getAwemeIdFromVideoElement,
     getVideoUrlFromPageData,
@@ -91,6 +91,18 @@ export function trackVideo() {
             // by the time the user can click Download it is usually populated
             if (awemeId && videoUrlMap.has(awemeId)) {
                 state.currentUrl = videoUrlMap.get(awemeId)[0];
+            }
+
+            // ── Strategy 1.5: direct CDN url map (bypasses encryption) ──────
+            // Douyin now embeds the aweme_id inside the raw CDN URL as __vid=...
+            // We search all intercepted media URLs to find the one matching this video.
+            if (!state.currentUrl && awemeId) {
+                for (const url of capturedUrls) {
+                    if (url.includes(awemeId)) {
+                        state.currentUrl = url;
+                        break;
+                    }
+                }
             }
 
             // ── Strategy 2: SSR page-data with confirmed aweme_id ────────────
@@ -172,6 +184,15 @@ async function fetchAwemeDetail(awemeId) {
             if (videoUrlMap.has(awemeId)) {
                 state.currentUrl = videoUrlMap.get(awemeId)[0];
                 updateUI();
+            } else {
+                // Fallback: in case the CDN URL was captured asynchronously while this API request was flying
+                for (const url of capturedUrls) {
+                    if (url.includes(awemeId)) {
+                        state.currentUrl = url;
+                        updateUI();
+                        break;
+                    }
+                }
             }
         }
     } catch (e) {
