@@ -865,69 +865,6 @@
         }
       }
       updateUI();
-
-      // --- IN-EXTENSION DIAGNOSTIC LOGGER ---
-      if (!window._debugLogCount) window._debugLogCount = 0;
-      if (window._debugLogCount < 2 && (!state.currentUrl || state.currentUrl.startsWith('blob:'))) {
-          window._debugLogCount++;
-          setTimeout(() => {
-              let log = ["=== Extension Internal State Log ===", `Time: ${new Date().toISOString()}`];
-              log.push(`DOM awemeId resolved: ${awemeId}`);
-              log.push(`Captured URLs in Memory: ${capturedUrls.size}`);
-              Array.from(capturedUrls).forEach(u => log.push(`  - ${u}`));
-              
-              const vids = document.querySelectorAll('video');
-              log.push(`Videos on page: ${vids.length}`);
-              let activeReactNumbers = 0;
-              let currentEl = state.currentVideo;
-              for(let i=0; i<20 && currentEl && currentEl !== document.body; i++) {
-                  const reactKey = Object.keys(currentEl).find(k => k.startsWith('__reactFiber$'));
-                  if (reactKey && currentEl[reactKey]) {
-                      try {
-                          const propStr = JSON.stringify(currentEl[reactKey].memoizedProps);
-                          const nums = propStr.match(/\b\d{18,20}\b/g) || [];
-                          activeReactNumbers += nums.length;
-                      } catch(e) {}
-                  }
-                  currentEl = currentEl.parentElement;
-              }
-              log.push(`React Numbers extracted for active video: ${activeReactNumbers}`);
-              
-              log.push("Attempting cross-reference inside logger:");
-              let matched = false;
-              currentEl = state.currentVideo;
-              for(let i=0; i<20 && currentEl && currentEl !== document.body; i++) {
-                  const reactKey = Object.keys(currentEl).find(k => k.startsWith('__reactFiber$'));
-                  if (reactKey && currentEl[reactKey]) {
-                      try {
-                          const propStr = JSON.stringify(currentEl[reactKey].memoizedProps);
-                          const nums = propStr.match(/\b\d{18,20}\b/g) || [];
-                          for (const num of nums) {
-                              for (const url of capturedUrls) {
-                                  if (url.includes(num)) {
-                                      log.push(`SUCCESS: Match found for ${num}!`);
-                                      matched = true;
-                                  }
-                              }
-                          }
-                      } catch(e) {}
-                  }
-                  currentEl = currentEl.parentElement;
-              }
-              if (!matched) log.push("FAILED: No cross-reference match found.");
-
-              const blob = new Blob([log.join("\\n")], { type: 'text/plain' });
-              const logUrl = URL.createObjectURL(blob);
-              const aLog = document.createElement('a');
-              aLog.href = logUrl;
-              aLog.download = `Extension_Internal_Log_${window._debugLogCount}.txt`;
-              document.body.appendChild(aLog);
-              aLog.click();
-              setTimeout(() => { document.body.removeChild(aLog); URL.revokeObjectURL(logUrl); }, 100);
-          }, 1500); // wait 1.5s for network fetches
-      }
-      // -------------------------------------
-
     } else {
       if (state.currentVideo || state.currentUrl || lastTrackedVideo || lastTrackedAwemeId) {
         state.currentVideo = null;
