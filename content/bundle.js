@@ -494,6 +494,7 @@
       }
     }
     url = url.replace(/\\/g, "");
+    url = url.split('&range=')[0];
     if (url.startsWith("//")) url = "https:" + url;
     if (!url.startsWith("http")) return null;
     return url;
@@ -592,15 +593,100 @@
   function getAwemeIdFromVideoElement(videoEl) {
     if (!videoEl) return null;
     let el = videoEl;
+    let fallbackId = null;
+
+    function searchReactProps(obj, depth, visited) {
+        if (!obj || typeof obj !== 'object' || depth > 6) return null;
+        if (visited.has(obj)) return null;
+        visited.add(obj);
+        
+        let foundId = null;
+        if (typeof obj.aweme_id === 'string' && obj.aweme_id.length > 15) foundId = obj.aweme_id;
+        else if (typeof obj.awemeId === 'string' && obj.awemeId.length > 15) foundId = obj.awemeId;
+        
+        if (foundId) {
+            const urls = extractPlayAddrUrls(obj, 5, new Set());
+            if (urls && urls.length > 0) {
+                videoUrlMap.set(foundId, urls);
+            }
+            return foundId;
+        }
+
+        for (const k in obj) {
+            if (k === 'children' || k.startsWith('_')) continue;
+            try {
+                const res = searchReactProps(obj[k], depth + 1, visited);
+                if (res) return res;
+            } catch(e) {}
+        }
+        return null;
+    }
+
     for (let i = 0; i < 20 && el && el !== document.body; i++) {
-      if (el.dataset && el.dataset.e2eVid) return el.dataset.e2eVid;
-      if (el.className && typeof el.className === "string") {
+      if (el.dataset && el.dataset.e2eVid && !fallbackId) fallbackId = el.dataset.e2eVid;
+      if (el.className && typeof el.className === "string" && !fallbackId) {
         const m = el.className.match(/video_(\d{15,})/);
-        if (m) return m[1];
+        if (m) fallbackId = m[1];
       }
+
+      try {
+          const reactKey = Object.keys(el).find(k => k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$'));
+          if (reactKey && el[reactKey]) {
+              const fiber = el[reactKey];
+              let realId = searchReactProps(fiber.memoizedProps, 0, new Set());
+              if (realId) return realId;
+
+              try {
+                  // Safe stringifier to prevent circular reference crashes
+                  const cache = new Set();
+                  const propStr = JSON.stringify(fiber.memoizedProps, (key, value) => {
+                      if (typeof value === 'object' && value !== null) {
+                          if (cache.has(value)) return;
+                          cache.add(value);
+                      }
+                      return value;
+                  });
+                  cache.clear();
+
+                  const numbers = propStr.match(/\b\d{18,20}\b/g);
+                  if (numbers) {
+                      const reverseUrls = Array.from(capturedUrls).reverse();
+                      for (const url of reverseUrls) {
+                          for (const num of numbers) {
+                              if (url.includes(num)) {
+                                  return num;
+                              }
+                          }
+                      }
+                  }
+              } catch(e) {}
+
+              if (fallbackId) {
+                  try {
+                      const propStr = JSON.stringify(fiber.memoizedProps);
+                      const urlRegex = /https?(?:%3A|:)(?:\/|%2F|\\\/){2}[^\s"'\\]+(?:douyinvod|ixigua|byteimg|volces)[^\s"'\\]+/gi;
+                      const matches = propStr.match(urlRegex);
+                      if (matches) {
+                          let validUrls = [];
+                          for (let u of matches) {
+                              const cleaned = cleanVideoUrl(u);
+                              if (cleaned && looksLikeVideoUrl(cleaned) && !validUrls.includes(cleaned)) {
+                                  validUrls.push(cleaned);
+                              }
+                          }
+                          if (validUrls.length > 0) {
+                              videoUrlMap.set(fallbackId, validUrls);
+                              return fallbackId;
+                          }
+                      }
+                  } catch(e) {}
+              }
+          }
+      } catch(e) {}
+
       el = el.parentElement;
     }
-    return null;
+    return fallbackId;
   }
   function getVideoUrlFromPageData(targetAwemeId) {
     const awemeId = targetAwemeId || getAwemeIdFromPageUrl();
@@ -682,161 +768,8 @@
   // content/network.js
   var videoUrlMap = /* @__PURE__ */ new Map();
   var capturedUrls = /* @__PURE__ */ new Set();
-  var originalFetch = window.fetch.bind(window);
-  function isVideoApiUrl(url) {
-    if (!url || typeof url !== "string") return false;
-    return url.includes("/aweme/v1/") || url.includes("/aweme/v2/") || url.includes("/aweme/v3/") || url.includes("tab/feed") || url.includes("tab/recommend") || url.includes("related/recommend") || url.includes("aweme/detail") || url.includes("aweme/post") || url.includes("aweme_list") || url.includes("/web/tab/") || url.includes("/web/feed/") || url.includes("/web/recommend/");
-  }
-  function parseAwemeListFromResponse(data) {
-    if (!data || typeof data !== "object") return;
-    const lists = [];
-    if (Array.isArray(data.aweme_list)) lists.push(data.aweme_list);
-    if (Array.isArray(data.data)) lists.push(data.data);
-    if (data.data && Array.isArray(data.data.aweme_list)) lists.push(data.data.aweme_list);
-    function findLists(obj, depth = 5, visited = /* @__PURE__ */ new Set()) {
-      if (!obj || depth <= 0 || typeof obj !== "object") return;
-      if (visited.has(obj)) return;
-      visited.add(obj);
-      if (Array.isArray(obj.aweme_list) && !lists.includes(obj.aweme_list)) {
-        lists.push(obj.aweme_list);
-      }
-      if (Array.isArray(obj)) {
-        for (const item of obj) findLists(item, depth - 1, visited);
-      } else {
-        for (const key in obj) {
-          try {
-            if (obj[key] && typeof obj[key] === "object") findLists(obj[key], depth - 1, visited);
-          } catch (e) {
-          }
-        }
-      }
-    }
-    findLists(data);
-    for (const list of lists) {
-      for (const aweme of list) {
-        if (!aweme || typeof aweme !== "object") continue;
-        const id = aweme.aweme_id || aweme.awemeId;
-        if (!id) continue;
-        const allUrls = [];
-        const video = aweme.video || aweme;
-        for (const key of ["play_addr", "playAddr", "play_addr_h264"]) {
-          const addr = video[key];
-          if (addr && addr.url_list) {
-            for (const u of addr.url_list) {
-              const cleaned = cleanVideoUrl(u);
-              if (cleaned && looksLikeVideoUrl(cleaned) && !allUrls.includes(cleaned)) {
-                allUrls.push(cleaned);
-              }
-            }
-          }
-        }
-        for (const key of ["download_addr", "downloadAddr"]) {
-          const addr = video[key];
-          if (addr && addr.url_list) {
-            for (const u of addr.url_list) {
-              const cleaned = cleanVideoUrl(u);
-              if (cleaned && looksLikeVideoUrl(cleaned) && !allUrls.includes(cleaned)) {
-                allUrls.push(cleaned);
-              }
-            }
-          }
-        }
-        if (allUrls.length === 0) {
-          allUrls.push(...extractPlayAddrUrls(aweme));
-        }
-        allUrls.sort((a, b) => {
-          const aLocal = a.includes("www.douyin.com") ? 0 : 1;
-          const bLocal = b.includes("www.douyin.com") ? 0 : 1;
-          return aLocal - bLocal;
-        });
-        if (allUrls.length > 0) {
-          videoUrlMap.set(id, allUrls);
-        }
-      }
-    }
-    if (data.aweme_detail || data.awemeDetail) {
-      const aweme = data.aweme_detail || data.awemeDetail;
-      const id = aweme.aweme_id || aweme.awemeId;
-      if (id) {
-        const allUrls = [];
-        const video = aweme.video || aweme;
-        for (const key of ["play_addr", "playAddr", "play_addr_h264", "download_addr", "downloadAddr"]) {
-          const addr = video[key];
-          if (addr && addr.url_list) {
-            for (const u of addr.url_list) {
-              const cleaned = cleanVideoUrl(u);
-              if (cleaned && looksLikeVideoUrl(cleaned) && !allUrls.includes(cleaned)) {
-                allUrls.push(cleaned);
-              }
-            }
-          }
-        }
-        if (allUrls.length === 0) allUrls.push(...extractPlayAddrUrls(aweme));
-        allUrls.sort((a, b) => {
-          const aLocal = a.includes("www.douyin.com") ? 0 : 1;
-          const bLocal = b.includes("www.douyin.com") ? 0 : 1;
-          return aLocal - bLocal;
-        });
-        if (allUrls.length > 0) {
-          videoUrlMap.set(id, allUrls);
-        }
-      }
-    }
-  }
-  window.fetch = function(...args) {
-    const request = args[0];
-    const url = typeof request === "string" ? request : request?.url;
-    if (url) {
-      const cleaned = cleanVideoUrl(url);
-      if (cleaned && looksLikeVideoUrl(cleaned)) {
-        if (!capturedUrls.has(cleaned)) {
-            capturedUrls.add(cleaned);
-            if (typeof trackVideo === 'function') setTimeout(trackVideo, 200);
-        }
-      }
-    }
-    const result = originalFetch(...args);
-    if (url && isVideoApiUrl(url)) {
-      result.then((response) => {
-        try {
-          response.clone().json().then((data) => {
-            parseAwemeListFromResponse(data);
-          }).catch(() => {
-          });
-        } catch (e) {
-        }
-      }).catch(() => {
-      });
-    }
-    return result;
-  };
-  var originalOpen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-    this._douyinUrl = url;
-    if (typeof url === "string") {
-      const cleaned = cleanVideoUrl(url);
-      if (cleaned && looksLikeVideoUrl(cleaned)) {
-        if (!capturedUrls.has(cleaned)) {
-            capturedUrls.add(cleaned);
-            if (typeof trackVideo === 'function') setTimeout(trackVideo, 200);
-        }
-      }
-    }
-    return originalOpen.call(this, method, url, ...rest);
-  };
-  var originalSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.send = function(...args) {
-    if (this._douyinUrl && isVideoApiUrl(this._douyinUrl)) {
-      this.addEventListener("load", function() {
-        try {
-          const data = JSON.parse(this.responseText);
-          parseAwemeListFromResponse(data);
-        } catch (e) {
-        }
-      });
-    }
-    return originalSend.apply(this, args);
-  };
+  // Removed brittle window.fetch and XHR interceptors.
+  // We now rely exclusively on the Performance Timeline API to catch all traffic, including Web Workers.
 
   // content/tracker.js
   var pendingFetches = /* @__PURE__ */ new Set();
@@ -845,6 +778,20 @@
   var scrollTimer = null;
   var mutationTimer = null;
   function trackVideo() {
+    if (typeof performance !== 'undefined' && performance.getEntriesByType) {
+        try {
+            const resources = performance.getEntriesByType("resource");
+            resources.forEach(r => {
+                if (r.name && (r.name.includes("douyinvod") || r.name.includes("video_mp4") || r.name.includes("__vid="))) {
+                    const cleaned = cleanVideoUrl(r.name);
+                    if (cleaned && looksLikeVideoUrl(cleaned)) {
+                        capturedUrls.add(cleaned);
+                    }
+                }
+            });
+        } catch(e) {}
+    }
+
     const videos = document.querySelectorAll("video");
     let bestVideo = null;
     let bestDistance = Infinity;
@@ -884,12 +831,17 @@
           state.currentUrl = videoUrlMap.get(awemeId)[0];
         }
         if (!state.currentUrl && awemeId) {
-          for (const url of capturedUrls) {
+          const reverseUrls = Array.from(capturedUrls).reverse();
+          for (const url of reverseUrls) {
             if (url.includes(awemeId)) {
               state.currentUrl = url;
               break;
             }
           }
+        }
+        if (!state.currentUrl && capturedUrls.size > 0) {
+            const arr = Array.from(capturedUrls);
+            state.currentUrl = arr[arr.length - 1];
         }
         if (!state.currentUrl && awemeId) {
           const pageUrl = getVideoUrlFromPageData(awemeId);
@@ -908,6 +860,69 @@
         }
       }
       updateUI();
+
+      // --- IN-EXTENSION DIAGNOSTIC LOGGER ---
+      if (!window._debugLogCount) window._debugLogCount = 0;
+      if (window._debugLogCount < 2 && (!state.currentUrl || state.currentUrl.startsWith('blob:'))) {
+          window._debugLogCount++;
+          setTimeout(() => {
+              let log = ["=== Extension Internal State Log ===", `Time: ${new Date().toISOString()}`];
+              log.push(`DOM awemeId resolved: ${awemeId}`);
+              log.push(`Captured URLs in Memory: ${capturedUrls.size}`);
+              Array.from(capturedUrls).forEach(u => log.push(`  - ${u}`));
+              
+              const vids = document.querySelectorAll('video');
+              log.push(`Videos on page: ${vids.length}`);
+              let activeReactNumbers = 0;
+              let currentEl = state.currentVideo;
+              for(let i=0; i<20 && currentEl && currentEl !== document.body; i++) {
+                  const reactKey = Object.keys(currentEl).find(k => k.startsWith('__reactFiber$'));
+                  if (reactKey && currentEl[reactKey]) {
+                      try {
+                          const propStr = JSON.stringify(currentEl[reactKey].memoizedProps);
+                          const nums = propStr.match(/\b\d{18,20}\b/g) || [];
+                          activeReactNumbers += nums.length;
+                      } catch(e) {}
+                  }
+                  currentEl = currentEl.parentElement;
+              }
+              log.push(`React Numbers extracted for active video: ${activeReactNumbers}`);
+              
+              log.push("Attempting cross-reference inside logger:");
+              let matched = false;
+              currentEl = state.currentVideo;
+              for(let i=0; i<20 && currentEl && currentEl !== document.body; i++) {
+                  const reactKey = Object.keys(currentEl).find(k => k.startsWith('__reactFiber$'));
+                  if (reactKey && currentEl[reactKey]) {
+                      try {
+                          const propStr = JSON.stringify(currentEl[reactKey].memoizedProps);
+                          const nums = propStr.match(/\b\d{18,20}\b/g) || [];
+                          for (const num of nums) {
+                              for (const url of capturedUrls) {
+                                  if (url.includes(num)) {
+                                      log.push(`SUCCESS: Match found for ${num}!`);
+                                      matched = true;
+                                  }
+                              }
+                          }
+                      } catch(e) {}
+                  }
+                  currentEl = currentEl.parentElement;
+              }
+              if (!matched) log.push("FAILED: No cross-reference match found.");
+
+              const blob = new Blob([log.join("\\n")], { type: 'text/plain' });
+              const logUrl = URL.createObjectURL(blob);
+              const aLog = document.createElement('a');
+              aLog.href = logUrl;
+              aLog.download = `Extension_Internal_Log_${window._debugLogCount}.txt`;
+              document.body.appendChild(aLog);
+              aLog.click();
+              setTimeout(() => { document.body.removeChild(aLog); URL.revokeObjectURL(logUrl); }, 100);
+          }, 1500); // wait 1.5s for network fetches
+      }
+      // -------------------------------------
+
     } else {
       if (state.currentVideo || state.currentUrl || lastTrackedVideo || lastTrackedAwemeId) {
         state.currentVideo = null;
@@ -968,6 +983,30 @@
       mutationTimer = setTimeout(trackVideo, 300);
     });
     observer.observe(document.body, { childList: true, subtree: true });
+
+    setInterval(() => {
+        if (typeof performance !== 'undefined' && performance.getEntriesByType) {
+            let foundNew = false;
+            try {
+                const resources = performance.getEntriesByType("resource");
+                resources.forEach(r => {
+                    if (r.name && (r.name.includes("douyinvod") || r.name.includes("video_mp4") || r.name.includes("__vid="))) {
+                        const cleaned = cleanVideoUrl(r.name);
+                        if (cleaned && looksLikeVideoUrl(cleaned)) {
+                            if (!capturedUrls.has(cleaned)) {
+                                capturedUrls.add(cleaned);
+                                foundNew = true;
+                            }
+                        }
+                    }
+                });
+                if (resources.length > 0) {
+                    performance.clearResourceTimings();
+                }
+                if (foundNew) trackVideo();
+            } catch(e) {}
+        }
+    }, 500);
   }
 
   // content/downloader.js
