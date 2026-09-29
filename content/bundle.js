@@ -7,6 +7,10 @@
      */
     currentVideo: null,
     /**
+     * The true Douyin ID (awemeId) for the active video.
+     */
+    currentAwemeId: null,
+    /**
      * The resolved CDN download URL for the active video (always https://).
      * Never a blob: URL — those cannot be downloaded directly.
      * null until a URL has been found via one of the extraction strategies.
@@ -815,6 +819,7 @@
       const isNewVideo = bestVideo !== state.currentVideo;
       const isNewAwemeId = awemeId !== lastTrackedAwemeId;
       state.currentVideo = bestVideo;
+      state.currentAwemeId = awemeId;
       refs.awemeIdEl.textContent = awemeId ? `ID: ${awemeId}` : "ID: not found";
       if (isNewVideo || isNewAwemeId) {
         lastTrackedVideo = bestVideo;
@@ -926,6 +931,7 @@
     } else {
       if (state.currentVideo || state.currentUrl || lastTrackedVideo || lastTrackedAwemeId) {
         state.currentVideo = null;
+        state.currentAwemeId = null;
         state.currentUrl = null;
         lastTrackedVideo = null;
         lastTrackedAwemeId = null;
@@ -1032,7 +1038,7 @@
     if (state.uiMode !== "compact") {
       refs.panel.classList.add("dl-panel-animating");
     }
-    const filename = `${getFormattedTimestamp()}.mp4`;
+    const filename = state.currentAwemeId ? `Douyin_${state.currentAwemeId}.mp4` : `${getFormattedTimestamp()}.mp4`;
     const urlToDownload = state.currentUrl;
     const cleanup = () => {
       state.isDownloading = false;
@@ -1252,7 +1258,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `${getFormattedTimestamp()}.webm`;
+        a.download = state.currentAwemeId ? `Douyin_${state.currentAwemeId}.webm` : `${getFormattedTimestamp()}.webm`;
         a.click();
         URL.revokeObjectURL(url);
         recordDownloadCount();
