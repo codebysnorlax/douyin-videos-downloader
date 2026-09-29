@@ -13,9 +13,28 @@
  * styles.css referenced an unused element ID "#douyin-dl-ext").
  */
 
-/* Google Fonts — must precede all rules; browser ignores @import after rules */
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
-
+/* Local Fonts */
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/Poppins/Poppins-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('../assets/fonts/Poppins/Poppins-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../assets/fonts/Poppins/Poppins-SemiBold.ttf') format('truetype');
+}
 /* ── Panel container ─────────────────────────────────────────────────────── */
 /*
  * Fixed-position overlay panel injected into every Douyin page.

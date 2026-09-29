@@ -59,7 +59,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "content/*"],
+      "resources": ["icons/*", "content/*", "assets/*"],
       "matches": ["*://*.douyin.com/*"]
     }
   ]
