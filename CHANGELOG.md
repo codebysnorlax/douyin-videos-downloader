@@ -1,6 +1,7 @@
 # Changelog
 
-## [1.4.0] - 2026-09-29
+<details>
+<summary><h2>[1.4.0] - 2026-09-29</h2></summary>
 
 ### Fixed
 
@@ -33,3 +34,5 @@ Douyin introduced several sophisticated anti-scraping traps. Here is how they we
 6. **Chunked Range Downloads**
     - **Problem**: The extracted CDN URLs sometimes contained range constraints (e.g. `&range=0-500000`), causing only partial video fragments to download.
     - **Fix**: Added an automatic query-string sanitizer to strip `&range=` constraints from the final URL, forcing a full video download.
+
+</details>
