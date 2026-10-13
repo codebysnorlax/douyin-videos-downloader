@@ -260,9 +260,15 @@ export function isValidVideoBlob(blob) {
 
 export function recordDownloadCount() {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        chrome.storage.local.get(['downloadCount'], (res) => {
+        const todayKey = new Date().toISOString().slice(0, 10);
+        chrome.storage.local.get(['downloadCount', 'todayDownloads', 'todayDate'], (res) => {
             const count = (res.downloadCount || 0) + 1;
-            chrome.storage.local.set({ downloadCount: count });
+            const todayCount = (res.todayDate === todayKey ? (res.todayDownloads || 0) : 0) + 1;
+            chrome.storage.local.set({
+                downloadCount: count,
+                todayDownloads: todayCount,
+                todayDate: todayKey
+            });
         });
     }
 }
