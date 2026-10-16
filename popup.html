@@ -231,6 +231,7 @@
     }
 
     .card-url-found-header {
+      position: relative;
       height: 20px;
       display: flex;
       align-items: center;
@@ -245,6 +246,27 @@
       color: #CACACA;
       line-height: 1;
       text-align: center;
+    }
+
+    .card-redirect-btn {
+      position: absolute;
+      right: 9px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      cursor: pointer;
+      line-height: 0;
+      opacity: 0.85;
+      transition: opacity 0.2s ease, transform 0.15s ease;
+    }
+
+    .card-redirect-btn img {
+      width: 12px;
+      height: 12px;
+      display: block;
     }
 
     .card-url-found-body {
@@ -707,13 +729,15 @@
     <div class="card-url-found">
       <div class="card-url-found-header">
         <span id="status-text" class="card-url-found-title">Url Found</span>
+        <a id="url-redirect-link" href="#" target="_blank" class="card-redirect-btn" title="Open video in new tab">
+          <img src="assets/svgs/redirect.svg" alt="Redirect">
+        </a>
       </div>
       <div class="card-internal-divider"></div>
       <div class="card-url-found-body">
         <div id="status-detail" class="url-text">Checking active tab...</div>
       </div>
       <span id="status-dot" class="hidden-state"></span>
-      <a id="url-redirect-link" href="#" target="_blank" class="hidden-state"></a>
     </div>
 
     <!-- 3. Record and Download Buttons -->
