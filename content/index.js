@@ -99,13 +99,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'rescan') {
         trackVideo();
         updateUI();
+        sendResponse({
+            hasVideo: !!state.currentVideo,
+            url: state.currentUrl,
+            awemeId: state.currentAwemeId,
+            isRecording: state.isRecording
+        });
+        return true;
     }
     if (message.action === 'getStatus') {
         sendResponse({
             hasVideo: !!state.currentVideo,
             url: state.currentUrl,
+            awemeId: state.currentAwemeId,
             isRecording: state.isRecording
         });
+        return true;
     }
 });
 

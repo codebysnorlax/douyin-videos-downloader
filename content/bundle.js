@@ -345,6 +345,46 @@
       refs.compactBtn.classList.remove("downloading");
     }
   }
+
+  let lastBroadcastUrl = undefined;
+  let lastBroadcastVideo = undefined;
+  let lastBroadcastAwemeId = undefined;
+  let lastBroadcastRecording = undefined;
+
+  function notifyStatusChange(force = false) {
+    const hasVideo = !!state.currentVideo;
+    const url = state.currentUrl || null;
+    const awemeId = state.currentAwemeId || null;
+    const isRecording = !!state.isRecording;
+
+    if (!force &&
+        url === lastBroadcastUrl &&
+        hasVideo === lastBroadcastVideo &&
+        awemeId === lastBroadcastAwemeId &&
+        isRecording === lastBroadcastRecording) {
+      return;
+    }
+
+    lastBroadcastUrl = url;
+    lastBroadcastVideo = hasVideo;
+    lastBroadcastAwemeId = awemeId;
+    lastBroadcastRecording = isRecording;
+
+    const payload = { hasVideo, url, awemeId, isRecording };
+
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ action: 'videoStatusChanged', ...payload }).catch(() => {});
+      }
+    } catch (e) {}
+
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({ activeVideoState: { ...payload, timestamp: Date.now() } });
+      }
+    } catch (e) {}
+  }
+
   function updateUI() {
     if (state.isDownloading) {
       refs.downloadBtn.disabled = true;
@@ -390,6 +430,7 @@
       refs.captureBtn.style.opacity = "0.5";
       refs.captureBtn.style.cursor = "not-allowed";
       refs.captureBtn.disabled = true;
+      notifyStatusChange();
       return;
     }
     const isBlob = state.currentVideo.src?.startsWith("blob:");
@@ -480,6 +521,7 @@
       refs.captureBtn.style.cursor = "not-allowed";
       refs.captureBtn.disabled = true;
     }
+    notifyStatusChange();
   }
   function getFormattedTimestamp() {
     const now = /* @__PURE__ */ new Date();
@@ -1365,13 +1407,23 @@
     if (message.action === "rescan") {
       trackVideo();
       updateUI();
+      notifyStatusChange(true);
+      sendResponse({
+        hasVideo: !!state.currentVideo,
+        url: state.currentUrl,
+        awemeId: state.currentAwemeId,
+        isRecording: state.isRecording
+      });
+      return true;
     }
     if (message.action === "getStatus") {
       sendResponse({
         hasVideo: !!state.currentVideo,
         url: state.currentUrl,
+        awemeId: state.currentAwemeId,
         isRecording: state.isRecording
       });
+      return true;
     }
   });
   window.dld = {

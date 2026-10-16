@@ -427,6 +427,45 @@ export function resetDownloadBtn() {
     }
 }
 
+let lastBroadcastUrl = undefined;
+let lastBroadcastVideo = undefined;
+let lastBroadcastAwemeId = undefined;
+let lastBroadcastRecording = undefined;
+
+export function notifyStatusChange(force = false) {
+    const hasVideo = !!state.currentVideo;
+    const url = state.currentUrl || null;
+    const awemeId = state.currentAwemeId || null;
+    const isRecording = !!state.isRecording;
+
+    if (!force &&
+        url === lastBroadcastUrl &&
+        hasVideo === lastBroadcastVideo &&
+        awemeId === lastBroadcastAwemeId &&
+        isRecording === lastBroadcastRecording) {
+        return;
+    }
+
+    lastBroadcastUrl = url;
+    lastBroadcastVideo = hasVideo;
+    lastBroadcastAwemeId = awemeId;
+    lastBroadcastRecording = isRecording;
+
+    const payload = { hasVideo, url, awemeId, isRecording };
+
+    try {
+        if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({ action: 'videoStatusChanged', ...payload }).catch(() => {});
+        }
+    } catch (e) {}
+
+    try {
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.set({ activeVideoState: { ...payload, timestamp: Date.now() } });
+        }
+    } catch (e) {}
+}
+
 export function updateUI() {
     if (state.isDownloading) {
         refs.downloadBtn.disabled      = true;
@@ -480,6 +519,7 @@ export function updateUI() {
         refs.captureBtn.style.opacity  = '0.5';
         refs.captureBtn.style.cursor   = 'not-allowed';
         refs.captureBtn.disabled       = true;
+        notifyStatusChange();
         return;
     }
 
@@ -559,6 +599,7 @@ export function updateUI() {
         refs.captureBtn.style.cursor   = 'not-allowed';
         refs.captureBtn.disabled       = true;
     }
+    notifyStatusChange();
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────────
