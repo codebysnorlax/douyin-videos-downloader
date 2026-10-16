@@ -411,6 +411,19 @@
     letter-spacing: 0.3px;
     white-space: nowrap;
     flex-shrink: 0;
+    width: 135px;
+    text-align: left;
+    display: inline-flex;
+    justify-content: flex-start;
+    align-items: baseline;
+}
+
+.dl-aweme-label {
+    flex-shrink: 0;
+}
+
+.dl-aweme-val {
+    flex-shrink: 0;
 }
 
 /* ── URL display ─────────────────────────────────────────────────────────── */

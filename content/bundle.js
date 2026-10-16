@@ -182,6 +182,9 @@
     var statusRow = document.createElement("div"); statusRow.className = "dl-status-row";
     var statusEl = document.createElement("div"); statusEl.id = "dl-status"; statusEl.className = "dl-status scanning"; statusEl.textContent = "Scanning for videos...";
     var awemeIdEl = document.createElement("div"); awemeIdEl.id = "dl-aweme-id"; awemeIdEl.className = "dl-aweme-id";
+    var awemeLabel = document.createElement("span"); awemeLabel.className = "dl-aweme-label"; awemeLabel.textContent = "ID:\u00A0"; awemeLabel.style.display = "none";
+    var awemeVal = document.createElement("span"); awemeVal.className = "dl-aweme-val";
+    awemeIdEl.appendChild(awemeLabel); awemeIdEl.appendChild(awemeVal);
     statusRow.appendChild(statusEl); statusRow.appendChild(awemeIdEl);
     header.appendChild(statusRow);
     var urlDisplay = document.createElement("div"); urlDisplay.id = "dl-url-display"; urlDisplay.className = "dl-url-display dl-url-hoverable"; urlDisplay.textContent = "No video detected";
@@ -781,6 +784,75 @@
   var lastTrackedAwemeId = null;
   var scrollTimer = null;
   var mutationTimer = null;
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  let currentAwemeAnimId = 0;
+  let lastTargetAwemeText = null;
+
+  async function updateAwemeIdAnimated(targetText) {
+    if (!refs.awemeIdEl) return;
+    if (targetText === lastTargetAwemeText) return;
+    lastTargetAwemeText = targetText;
+
+    const animId = ++currentAwemeAnimId;
+    const SPEED = 10; // milliseconds per character
+    const PAUSE = 20; // pause between erase and type
+
+    // Ensure dedicated label and value spans exist so "ID: " remains static in its original position
+    let labelEl = refs.awemeIdEl.querySelector(".dl-aweme-label");
+    let valEl = refs.awemeIdEl.querySelector(".dl-aweme-val");
+    if (!labelEl || !valEl) {
+      refs.awemeIdEl.innerHTML = "";
+      labelEl = document.createElement("span");
+      labelEl.className = "dl-aweme-label";
+      labelEl.textContent = "ID:\u00A0";
+      valEl = document.createElement("span");
+      valEl.className = "dl-aweme-val";
+      refs.awemeIdEl.appendChild(labelEl);
+      refs.awemeIdEl.appendChild(valEl);
+    }
+
+    const isBlank = !targetText;
+    let targetNum = "";
+    if (!isBlank) {
+      targetNum = targetText.startsWith("ID:") ? targetText.slice(3).trim() : targetText;
+    }
+
+    let currentNum = valEl.textContent || "";
+    if (currentNum === targetNum && (!isBlank || labelEl.style.display === "none")) return;
+
+    // Erase characters from RIGHT to LEFT
+    while (currentNum.length > 0) {
+      if (animId !== currentAwemeAnimId) return;
+      currentNum = currentNum.slice(0, -1);
+      valEl.textContent = currentNum;
+      await sleep(SPEED);
+    }
+
+    if (animId !== currentAwemeAnimId) return;
+
+    if (isBlank) {
+      labelEl.style.display = "none";
+      valEl.textContent = "";
+      return;
+    }
+
+    labelEl.style.display = "";
+    await sleep(PAUSE);
+
+    // Type new characters from LEFT to RIGHT
+    for (const character of targetNum) {
+      if (animId !== currentAwemeAnimId) return;
+      currentNum += character;
+      valEl.textContent = currentNum;
+      await sleep(SPEED);
+    }
+
+    if (animId === currentAwemeAnimId) {
+      valEl.textContent = targetNum;
+    }
+  }
+
   function trackVideo() {
     if (typeof performance !== 'undefined' && performance.getEntriesByType) {
         try {
@@ -820,7 +892,7 @@
       const isNewAwemeId = awemeId !== lastTrackedAwemeId;
       state.currentVideo = bestVideo;
       state.currentAwemeId = awemeId;
-      refs.awemeIdEl.textContent = awemeId ? `ID: ${awemeId}` : "ID: not found";
+      updateAwemeIdAnimated(awemeId ? `ID: ${awemeId}` : "ID: not found");
       if (isNewVideo || isNewAwemeId) {
         lastTrackedVideo = bestVideo;
         lastTrackedAwemeId = awemeId;
@@ -872,7 +944,7 @@
         state.currentUrl = null;
         lastTrackedVideo = null;
         lastTrackedAwemeId = null;
-        refs.awemeIdEl.textContent = "";
+        updateAwemeIdAnimated("");
         updateUI();
       }
     }
@@ -1318,6 +1390,7 @@
       return [...capturedUrls];
     },
     rescan: trackVideo,
+    updateAwemeId: updateAwemeIdAnimated,
     ui: refs.ui
   };
 })();

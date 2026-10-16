@@ -31,6 +31,74 @@ let lastTrackedAwemeId = null;
 let scrollTimer = null;
 let mutationTimer = null;
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let currentAwemeAnimId = 0;
+let lastTargetAwemeText = null;
+
+export async function updateAwemeIdAnimated(targetText) {
+    if (!refs.awemeIdEl) return;
+    if (targetText === lastTargetAwemeText) return;
+    lastTargetAwemeText = targetText;
+
+    const animId = ++currentAwemeAnimId;
+    const SPEED = 10; // milliseconds per character
+    const PAUSE = 20; // pause between erase and type
+
+    // Ensure dedicated label and value spans exist so "ID: " remains static in its original position
+    let labelEl = refs.awemeIdEl.querySelector('.dl-aweme-label');
+    let valEl = refs.awemeIdEl.querySelector('.dl-aweme-val');
+    if (!labelEl || !valEl) {
+        refs.awemeIdEl.innerHTML = '';
+        labelEl = document.createElement('span');
+        labelEl.className = 'dl-aweme-label';
+        labelEl.textContent = 'ID:\u00A0';
+        valEl = document.createElement('span');
+        valEl.className = 'dl-aweme-val';
+        refs.awemeIdEl.appendChild(labelEl);
+        refs.awemeIdEl.appendChild(valEl);
+    }
+
+    const isBlank = !targetText;
+    let targetNum = '';
+    if (!isBlank) {
+        targetNum = targetText.startsWith('ID:') ? targetText.slice(3).trim() : targetText;
+    }
+
+    let currentNum = valEl.textContent || '';
+    if (currentNum === targetNum && (!isBlank || labelEl.style.display === 'none')) return;
+
+    // Erase characters from RIGHT to LEFT
+    while (currentNum.length > 0) {
+        if (animId !== currentAwemeAnimId) return;
+        currentNum = currentNum.slice(0, -1);
+        valEl.textContent = currentNum;
+        await sleep(SPEED);
+    }
+
+    if (animId !== currentAwemeAnimId) return;
+
+    if (isBlank) {
+        labelEl.style.display = 'none';
+        valEl.textContent = '';
+        return;
+    }
+
+    labelEl.style.display = '';
+    await sleep(PAUSE);
+
+    // Type new characters from LEFT to RIGHT
+    for (const character of targetNum) {
+        if (animId !== currentAwemeAnimId) return;
+        currentNum += character;
+        valEl.textContent = currentNum;
+        await sleep(SPEED);
+    }
+
+    if (animId === currentAwemeAnimId) {
+        valEl.textContent = targetNum;
+    }
+}
+
 // ── Core tracking logic ───────────────────────────────────────────────────────
 
 /**
@@ -77,7 +145,7 @@ export function trackVideo() {
 
         // Always refresh the aweme-id display even if the video element hasn't
         // changed — the ID sometimes resolves after the first trackVideo() call
-        refs.awemeIdEl.textContent = awemeId ? `ID: ${awemeId}` : 'ID: not found';
+        updateAwemeIdAnimated(awemeId ? `ID: ${awemeId}` : 'ID: not found');
 
         if (isNewVideo || isNewAwemeId) {
             lastTrackedVideo = bestVideo;
@@ -143,7 +211,7 @@ export function trackVideo() {
             state.currentUrl   = null;
             lastTrackedVideo   = null;
             lastTrackedAwemeId = null;
-            refs.awemeIdEl.textContent = '';
+            updateAwemeIdAnimated('');
             updateUI();
         }
     }

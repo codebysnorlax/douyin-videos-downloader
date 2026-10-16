@@ -194,6 +194,14 @@ export function createPanel() {
     const awemeIdEl = document.createElement('div');
     awemeIdEl.id = 'dl-aweme-id';
     awemeIdEl.className = 'dl-aweme-id';
+    const awemeLabel = document.createElement('span');
+    awemeLabel.className = 'dl-aweme-label';
+    awemeLabel.textContent = 'ID:\u00A0';
+    awemeLabel.style.display = 'none';
+    const awemeVal = document.createElement('span');
+    awemeVal.className = 'dl-aweme-val';
+    awemeIdEl.appendChild(awemeLabel);
+    awemeIdEl.appendChild(awemeVal);
     statusRow.appendChild(statusEl);
     statusRow.appendChild(awemeIdEl);
     header.appendChild(statusRow);
