@@ -2,39 +2,42 @@
 
 ## Why
 
-During v1.4.0 and v1.5.1, fixes and features were applied directly to `content/bundle.js` without updating the modular `content/*.js` sources or removing obsolete v1.3 code paths. As a result, the modular source files and runtime bundle have diverged, dead handlers and Tampermonkey fallbacks remain in the codebase, broken `originalFetch`/`parseAwemeListFromResponse` calls throw silent `ReferenceError`s at runtime, and `trackVideo()` repeatedly walks and serializes React Fiber trees on every scroll, mutation, and 500ms poll.
+In v1.5.1, runtime changes were applied directly to `content/bundle.js` while the modular `content/*.js` files were left behind with obsolete v1.3 code. This drift left broken `originalFetch` and `parseAwemeListFromResponse` calls that throw silent `ReferenceError`s, an AMO-disallowed `innerHTML = ""` regression in `updateAwemeIdAnimated()`, an unguarded `JSON.stringify` crash path in React Fiber fallback scanning, uncached DOM/Fiber traversals on every tracking tick, premature `URL.revokeObjectURL()` in `recorder.js`, multi-tab state bleed in `popup.js` alongside an 800ms polling loop, and unused download handlers and `"downloads"` permission in `background.js` and `manifest.json`.
 
 ## What Changes
 
-- **Single-source-of-truth content script workflow**:
-  - Synchronize `content/state.js`, `content/ui.js`, `content/extractor.js`, `content/network.js`, `content/tracker.js`, `content/downloader.js`, `content/recorder.js`, and `content/index.js` with the active runtime behavior in `content/bundle.js`.
-  - Add a zero-dependency Node build script (with `package.json` `"build"` script) to generate `content/bundle.js` deterministically from `content/index.js` and its imports so future edits never drift.
+- **Single-source-of-truth content script pipeline**:
+  - Introduce `content/url-utils.js` and restructure `content/*.js` into a strictly acyclic 9-module DAG (`state.js`, `url-utils.js`, `network.js`, `ui.js`, `extractor.js`, `tracker.js`, `downloader.js`, `recorder.js`, `index.js`).
+  - Add a zero-dependency Node bundler (`scripts/build.js` with `--check` drift verification and `vm.Script` syntax check) to generate `content/bundle.js` deterministically.
   - Delete obsolete `content/loader.js`.
-- **Dead code & broken fallback removal**:
-  - Remove the broken `fetchAwemeDetail` (Strategy 4) and Round 2 detail-API refresh in `tracker.js`/`downloader.js`/`bundle.js` that reference undefined `originalFetch` and `parseAwemeListFromResponse`, along with unused `pendingFetches` and the obsolete `window.fetch`/`XMLHttpRequest` monkey-patches in `content/network.js`.
-  - Remove unused Tampermonkey `GM_download` and `GM_xmlhttpRequest` branches from `content/downloader.js`/`bundle.js`.
-  - Remove unused `download` and `fetchVideo` message listeners (`handleDownload`, `handleFetchVideo`, `downloadOne`) from `background.js`, preserving `chrome.runtime.onInstalled` storage cleanup.
-  - Remove unused CSS (`.shared-card-surface`, `.hidden-state` in `popup.html`; `#dl-panel.hidden` in `content/panel.css`) and permanently hidden compatibility DOM hooks (`#status-dot`, `#footer-ver`) and their dead assignments in `popup.js` without changing any visible UI, layout, or styling.
-- **Runtime & sync optimizations (no UI changes)**:
-  - Cache resolved `<video>` element -> `awemeId` mappings in a `WeakMap` inside `getAwemeIdFromVideoElement` and short-circuit redundant React Fiber traversals in `trackVideo()` when the active `<video>` already has a cached ID.
-  - Guard the remaining unguarded `JSON.stringify(fiber.memoizedProps)` call in the `fallbackId` branch of `getAwemeIdFromVideoElement` against circular references.
-  - Eliminate redundant 800ms `setInterval(syncStatus, 800)` polling in `popup.js`, relying on initial `syncStatus()` plus event-driven `videoStatusChanged` and `chrome.storage.onChanged` updates (with fallback only when initial tab sync is unavailable), and standardize `ext.tabs.create` usage.
-- **Explicit non-goals**:
-  - No visual, layout, color, typography, copy, or animation changes to the popup (`popup.html`) or in-page floating panel (`#douyin-dl-ui`, `content/panel.css`).
-  - Keep existing `assets/fonts/Poppins/` font files, `tests/find_react_props.js`, `tests/find_real_id.js`, and existing `capturedUrls` fallback semantics intact.
+- **Video tracking, extraction & caching**:
+  - Add a recycled-element-safe `WeakMap<HTMLVideoElement, { id: string, src: string }>` cache in `content/extractor.js` for authoritative IDs only (invalidated on `currentSrc || src` change; never caching `null` or decoy `data-e2e-vid` values) and a safe `trackVideo()` short-circuit.
+  - Extract a single-pass circular-safe `safeStringify()` in `content/extractor.js` reused for both digit scanning and `fallbackId` URL regex scanning.
+  - Fix SSR preemption in `content/tracker.js` so ID-matched `getVideoUrlFromPageData(awemeId)` and `!isFeedPage()` SSR extraction run before blind `capturedUrls` fallback.
+  - Replace `refs.awemeIdEl.innerHTML = ""` with `refs.awemeIdEl.replaceChildren()` for AMO compliance, and reset `state.blobMessageShown` / `state.blobTimeout` both on video switch and when `bestVideo` is `null`.
+- **Download, recorder & security hardening**:
+  - Remove broken `fetchAwemeDetail()` / `pendingFetches` (`tracker.js`), Round 2 `originalFetch` / `parseAwemeListFromResponse`, and Tampermonkey `GM_download` / `GM_xmlhttpRequest` branches (`downloader.js`).
+  - Use `state.currentAwemeId` in `fetchDownload()` and `Douyin_${state.currentAwemeId}.mp4` / `.webm` filenames, add `if (state.isDownloading) return;` re-entrancy guard in `downloadVideo()`, defer `URL.revokeObjectURL(url)` by `5000ms` in `recorder.js`, and escape `</` as `<\/` in `openDownloadTab()`.
+- **Event-driven popup sync & multi-tab isolation**:
+  - Update `content/recorder.js` to drop the unused `updateUI` import and call `notifyStatusChange()` on recording start, stop, and error recovery.
+  - Update `popup.js` (without editing `popup.html` or `content/panel.css`) to remove `setInterval(syncStatus, 800)`, isolate `videoStatusChanged` and `activeVideoState` updates to the active Douyin tab (`sender.tab?.id === activeTabId` and `isDouyin`), remove dead `#status-dot` and `#footer-ver` writes, normalize `(ext || chrome).tabs.create(...)`, and drop the dead download callback.
+- **Minimal background worker, manifest hygiene & docs**:
+  - **BREAKING (internal)**: Remove unused `onMessage`, `handleDownload`, `handleFetchVideo`, and `downloadOne` from `background.js`, retaining only `chrome.runtime.onInstalled` `showPanel` cleanup.
+  - Remove unused `"downloads"` permission from `manifest.json`, add `"*://douyin.com/*"` to `web_accessible_resources.matches`, and narrow `web_accessible_resources.resources` to `["icons/*", "assets/*"]`.
+  - Update `README.md` (build/verify workflow) and `CHANGELOG.md` (v1.5.1 + upcoming release entries).
 
 ## Capabilities
 
 ### New Capabilities
-- `video-tracking-and-download`: Efficient viewport video tracking with `WeakMap` ID caching, circular-safe React Fiber extraction, Performance Timeline URL capture, SSR fallback, and direct/blob/WebM capture downloading without dead userscript or broken detail-API paths.
-- `popup-status-sync`: Event-driven status synchronization between the content script and popup dashboard without redundant high-frequency polling, preserving identical popup UI and controls.
-- `content-script-bundling`: Deterministic build pipeline compiling modular `content/*.js` entry points into `content/bundle.js` alongside minimal MV3 background lifecycle handling.
+- `content-script-bundling`: Deterministic acyclic-DAG bundling from modular `content/*.js` sources into `content/bundle.js` with zero-dependency verification and minimal MV3 background/manifest hygiene.
+- `video-tracking-and-download`: Recycled-element-safe video ID caching, circular-safe extraction, SSR-prioritized URL resolution, AMO-compliant DOM updates, and hardened direct/recorded downloads.
+- `popup-status-sync`: Multi-tab-isolated, event-driven popup status synchronization without polling or UI file modifications.
 
 ### Modified Capabilities
-<!-- None; no specs exist in openspec/specs/ yet. -->
+<!-- None; openspec/specs/ is currently empty. -->
 
 ## Impact
 
-- **Content scripts**: `content/bundle.js`, `content/state.js`, `content/ui.js`, `content/extractor.js`, `content/network.js`, `content/tracker.js`, `content/downloader.js`, `content/recorder.js`, `content/index.js`, `content/panel.css`, removal of `content/loader.js`.
-- **Popup & background**: `popup.html`, `popup.js`, `background.js`.
-- **Tooling & docs**: New `scripts/build.js` and `package.json` build script; `data/ARCHITECTURE_AND_CHANGELOG.md` and `data/README.md` references to manual `bundle.js` syncing can be updated to reference the build script; `tests/run_ui_tests.html` remains the UI smoke verification target.
+- **Content scripts**: `content/state.js`, new `content/url-utils.js`, `content/network.js`, `content/ui.js`, `content/extractor.js`, `content/tracker.js`, `content/downloader.js`, `content/recorder.js`, `content/index.js`, `content/bundle.js`, removal of `content/loader.js`.
+- **Background, manifest & popup**: `background.js`, `manifest.json`, `popup.js` (`popup.html` and `content/panel.css` untouched).
+- **Tooling, tests & docs**: `scripts/build.js`, Node unit verification script, `README.md`, `CHANGELOG.md`.

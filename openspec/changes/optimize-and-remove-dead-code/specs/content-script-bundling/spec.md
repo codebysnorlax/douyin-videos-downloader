@@ -2,24 +2,28 @@
 
 ## Purpose
 
-Establishes a deterministic single-source-of-truth build workflow from modular content script sources to the runtime bundle while keeping the background service worker limited to active extension lifecycle responsibilities.
+Defines a deterministic, zero-dependency build pipeline compiling an acyclic content-script module graph into the runtime bundle while keeping background worker lifecycle and manifest permissions minimal and AMO-compliant.
 
 ## ADDED Requirements
 
-### Requirement: Single-source-of-truth content script bundle generation
-The repository SHALL generate the runtime content script bundle deterministically from the modular content script sources via a single local build command, leaving no obsolete loader files in the content script directory.
+### Requirement: Deterministic acyclic content script bundling
+The repository SHALL compile the modular content script sources in topological dependency order into a single IIFE runtime bundle using only Node.js standard library tooling, with zero third-party packages and no obsolete loader script.
 
-#### Scenario: Rebuilding the content script bundle locally
-- **WHEN** a developer runs the repository build command
-- **THEN** the runtime content script bundle is regenerated as a self-contained IIFE matching the modular content script sources without requiring external runtime network access
+#### Scenario: Zero-drift bundle verification succeeds
+- **WHEN** a developer runs the bundle drift and syntax verification command against the repository
+- **THEN** the bundler confirms that the generated output matches the committed runtime bundle byte-for-byte and compiles cleanly
 
-#### Scenario: Automated UI smoke verification passes on generated bundle
-- **WHEN** the generated content script bundle is loaded in the automated UI smoke test harness
-- **THEN** all UI wrapper, expanded panel, compact mode, toggle, close, and SVG icon assertions pass
+#### Scenario: Static security and AMO compliance checks pass
+- **WHEN** static checks scan all runtime scripts for disallowed dynamic DOM or code execution patterns
+- **THEN** zero occurrences of `innerHTML`, `outerHTML`, `eval(`, `new Function`, or dynamic `import(` are present
 
-### Requirement: Minimal background service worker lifecycle
-The background service worker SHALL clean up deprecated `showPanel` local storage state on extension install or update and SHALL NOT retain unused download or fetch message handlers.
+### Requirement: Minimal background lifecycle and manifest permissions
+The extension SHALL retain only deprecated storage cleanup on install or update in the background service worker, omit unused browser permissions, and expose only required icon and font assets to both `www.douyin.com` and bare `douyin.com` origins.
 
 #### Scenario: Extension installed or updated
-- **WHEN** the browser triggers the extension install or update lifecycle event
-- **THEN** the background service worker removes any leftover `showPanel` key from local storage without registering unused download listeners
+- **WHEN** the browser fires the install or update lifecycle event
+- **THEN** the background script removes any leftover `showPanel` local storage key without registering unused download listeners
+
+#### Scenario: Web-accessible assets loaded on bare Douyin domain
+- **WHEN** a user visits `https://douyin.com/` without the `www.` subdomain
+- **THEN** the manifest permits access to `icons/*` and `assets/*` (including bundled Poppins fonts) while keeping `content/*` inaccessible to page scripts
